@@ -61,6 +61,7 @@
             <section class="card summary-card">
                 <h3>Saldo Disponível</h3>
                 <h1 id="available-balance">R$ 0,00</h1>
+                <p class="balance-hint" id="balance-hint">Configure suas metas para começar</p>
                 <div class="progress-bar-container">
                     <div class="progress-bar" id="budget-progress" style="width: 0%;"></div>
                 </div>
@@ -71,21 +72,22 @@
                         <strong id="total-income">R$ 0,00</strong>
                     </div>
                     <div class="detail-item">
-                        <span>Guardar</span>
+                        <span>Poupança</span>
                         <strong id="savings-goal">R$ 0,00</strong>
                     </div>
                     <div class="detail-item">
-                        <span>P/ Projeto</span>
+                        <span>Projeto</span>
                         <strong id="project-contribution">R$ 0,00</strong>
                     </div>
                 </div>
             </section>
 
-                <!-- Minimizar este card apenas para o total -->
-                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
-                    <h3 style="font-size: 1rem;">Fixos & Parcelas Comprometidos:</h3>
-                    <strong id="committed-total" class="text-danger" style="font-size: 1.1rem;">R$ 0,00</strong>
-                </div>
+            <!-- Comprometido com Fixos e Parcelas -->
+            <div class="committed-row">
+                <h3>Fixos &amp; Parcelas</h3>
+                <strong id="committed-total" class="text-danger" style="font-size: 1rem; font-weight: 700;">R$ 0,00</strong>
+            </div>
+
 
                 <section class="card" style="margin-bottom: 1rem;">
                     <div class="card-header">
@@ -643,6 +645,9 @@
             <button type="button" class="btn-secondary w-100 close-modal" data-modal="modal-archived-report" style="margin-top: 1.5rem;">Fechar</button>
         </div>
     </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container"></div>
 
     <!-- Scripts em Módulos -->
     <script type="module" src="js/firebase-config.js"></script>

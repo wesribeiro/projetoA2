@@ -97,6 +97,25 @@ async function loadSources() {
 }
 
 // ==========================================
+// TOAST NOTIFICATION SYSTEM
+// ==========================================
+function showToast(message, type = 'success') {
+    const container = document.getElementById('toast-container');
+    if (!container) { console.warn(message); return; }
+
+    const icons = { success: '✅', error: '❌', warning: '⚠️' };
+    const toast = document.createElement('div');
+    toast.className = `toast${type !== 'success' ? ' ' + type : ''}`;
+    toast.innerHTML = `<span>${icons[type] || 'ℹ️'}</span><span>${message}</span>`;
+    container.prepend(toast);
+
+    setTimeout(() => {
+        toast.style.animation = 'toastOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 350);
+    }, 3200);
+}
+
+// ==========================================
 // 2. LÓGICA DO DASHBOARD
 // ==========================================
 function toggleSkeleton(show) {
@@ -161,6 +180,20 @@ async function loadDashboardData() {
         btnStart.textContent = 'Editar Metas';
         btnClose.style.display = 'block';
         displayMonth.innerHTML = '<i class="ph ph-check-circle text-main"></i> Metas Configuradas';
+
+        // Atualizar dica contextual do balance
+        const income = Number(monthData.income || 0);
+        const balanceHint = document.getElementById('balance-hint');
+        if (balanceHint) {
+            if (income === 0) {
+                balanceHint.textContent = '⚠️ Configure sua renda para ativar os gráficos';
+            } else {
+                const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
+                const today = new Date().getDate();
+                const daysLeft = daysInMonth - today;
+                balanceHint.textContent = `${daysLeft} dias restantes no mês`;
+            }
+        }
 
         // Preenche campos do modal de Configurações se já estiverem preenchidos no Cloud Firestore
         document.getElementById('start-income').value = monthData.income || 0;
@@ -256,7 +289,7 @@ async function loadDashboardData() {
         }
 
         // 4. Cálculos Financeiros Core do Sistema
-        const income = Number(monthData.income || 0);
+        // Note: income already declared above for balance-hint
         const savings = Number(monthData.savingsGoal || 0);
         const project = Number(monthData.projectContribution || 0);
 
@@ -1367,47 +1400,37 @@ function rebindDragEvents() {
     const scrollables = document.querySelectorAll('.cards-carousel, .table-responsive');
     
     scrollables.forEach(ele => {
-        // Remover listeners antigos (usando cloneNode, que remove event listeners de JS)
-        // Isso previne que handlers acumulem nos elementos estáticos, mas como os dinâmicos já vêm limpos,
-        // apenas verificamos se já tem a marcação
-        if (ele.dataset.dragbound === 'true') return;
-        ele.dataset.dragbound = 'true';
-
+        // Clone and replace to remove any stale event listeners
+        const fresh = ele.cloneNode(true);
+        ele.parentNode.replaceChild(fresh, ele);
+        
         let pos = { top: 0, left: 0, x: 0, y: 0 };
         let isDown = false;
 
-        const mouseDownHandler = function(e) {
+        fresh.addEventListener('mousedown', function(e) {
             isDown = true;
-            ele.style.cursor = 'grabbing';
-            ele.style.userSelect = 'none';
-            pos = {
-                left: ele.scrollLeft,
-                top: ele.scrollTop,
-                x: e.clientX,
-                y: e.clientY
-            };
-        };
+            fresh.style.cursor = 'grabbing';
+            fresh.style.userSelect = 'none';
+            pos = { left: fresh.scrollLeft, top: fresh.scrollTop, x: e.clientX, y: e.clientY };
+        });
 
-        const mouseMoveHandler = function(e) {
+        fresh.addEventListener('mousemove', function(e) {
             if (!isDown) return;
             e.preventDefault();
-            const dx = e.clientX - pos.x;
-            const dy = e.clientY - pos.y;
-            ele.scrollTop = pos.top - dy;
-            ele.scrollLeft = pos.left - dx;
-        };
+            fresh.scrollLeft = pos.left - (e.clientX - pos.x);
+            fresh.scrollTop = pos.top - (e.clientY - pos.y);
+        });
 
-        const mouseUpHandler = function() {
+        const stopDrag = () => {
             if (!isDown) return;
             isDown = false;
-            ele.style.cursor = 'grab';
-            ele.style.userSelect = '';
+            fresh.style.cursor = 'grab';
+            fresh.style.userSelect = '';
         };
 
-        ele.addEventListener('mousedown', mouseDownHandler);
-        ele.addEventListener('mousemove', mouseMoveHandler);
-        ele.addEventListener('mouseup', mouseUpHandler);
-        ele.addEventListener('mouseleave', mouseUpHandler);
-        ele.style.cursor = 'grab';
+        fresh.addEventListener('mouseup', stopDrag);
+        fresh.addEventListener('mouseleave', stopDrag);
+        fresh.style.cursor = 'grab';
     });
 }
+
