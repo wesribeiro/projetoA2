@@ -1,0 +1,513 @@
+:root {
+    --primary-color: #4CAF50;
+    --primary-dark: #388E3C;
+    --secondary-color: #2196F3;
+    --danger-color: #F44336;
+    --warning-color: #FFC107;
+    --text-main: #333333;
+    --text-muted: #757575;
+    --bg-main: #F4F7F6;
+    --card-bg: #FFFFFF;
+    --nav-bg: #FFFFFF;
+}
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: var(--bg-main);
+    color: var(--text-main);
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+/* Mobile Wrapper */
+.screen {
+    width: 100%;
+    max-width: 480px;
+    /* Mobile first lock */
+    background-color: var(--bg-main);
+    position: relative;
+    min-height: 100vh;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.05);
+}
+
+.hidden {
+    display: none !important;
+}
+
+.active {
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Login Screen --- */
+.login-box {
+    margin: auto;
+    padding: 2rem;
+    width: 100%;
+    text-align: center;
+}
+
+.login-box h1 {
+    color: var(--primary-color);
+    margin-bottom: 0.5rem;
+}
+
+form {
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    text-align: left;
+}
+
+.input-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 500;
+}
+
+.input-group input,
+.input-group select {
+    width: 100%;
+    padding: 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-size: 1rem;
+}
+
+.btn-primary {
+    background-color: var(--primary-color);
+    color: white;
+    border: none;
+    padding: 1rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.btn-primary:hover {
+    background-color: var(--primary-dark);
+}
+
+.btn-secondary {
+    background-color: transparent;
+    color: var(--primary-color);
+    border: 1px solid var(--primary-color);
+    padding: 0.5rem 1rem;
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.btn-text {
+    background: none;
+    border: none;
+    color: var(--danger-color);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.error-msg {
+    color: var(--danger-color);
+    margin-top: 1rem;
+    font-size: 0.9rem;
+}
+
+/* --- App Content --- */
+.app-header {
+    background-color: var(--primary-color);
+    color: white;
+    padding: 2rem 1.5rem 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-radius: 0 0 20px 20px;
+}
+
+.app-header h2 {
+    font-size: 1.5rem;
+}
+
+.app-header p {
+    font-size: 0.9rem;
+    opacity: 0.9;
+}
+
+.app-header .btn-text {
+    color: white;
+    opacity: 0.8;
+}
+
+.app-content {
+    padding: 1.5rem;
+    padding-bottom: 100px;
+    /* Space for Bottom Nav */
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+/* Cards */
+.card {
+    background: var(--card-bg);
+    border-radius: 12px;
+    padding: 1.5rem;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.summary-card {
+    text-align: center;
+}
+
+.summary-card h1 {
+    font-size: 2.5rem;
+    color: var(--primary-color);
+    margin: 0.5rem 0;
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background-color: #e0e0e0;
+    border-radius: 4px;
+    margin: 1rem 0;
+    overflow: hidden;
+}
+
+.progress-bar {
+    height: 100%;
+    background-color: var(--primary-color);
+    transition: width 0.3s ease;
+}
+
+.summary-details {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 1rem;
+    border-top: 1px solid #f0f0f0;
+    padding-top: 1rem;
+}
+
+.detail-item {
+    display: flex;
+    flex-direction: column;
+    font-size: 0.8rem;
+}
+
+.detail-item strong {
+    font-size: 1rem;
+    margin-top: 0.2rem;
+}
+
+.text-danger {
+    color: var(--danger-color);
+}
+
+.text-muted {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.w-100 {
+    width: 100%;
+}
+
+/* Navigation */
+.bottom-nav {
+    position: fixed;
+    bottom: 0;
+    width: 100%;
+    max-width: 480px;
+    background: var(--nav-bg);
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0.8rem 0;
+    box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+    border-radius: 20px 20px 0 0;
+    z-index: 100;
+}
+
+.nav-item {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    font-size: 1.8rem;
+    cursor: pointer;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 8px;
+    transition: color 0.2s;
+}
+
+.nav-item.active {
+    color: var(--primary-color);
+}
+
+/* FAB Component */
+.fab-container {
+    position: fixed;
+    bottom: 90px;
+    /* Acima da Bottom Nav */
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+}
+
+.fab-menu {
+    list-style: none;
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-end;
+    transform-origin: bottom right;
+    transition: opacity 0.3s, transform 0.3s;
+}
+
+.fab-menu.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transform: scale(0.9) translateY(20px);
+    display: flex !important;
+    /* Mantém no fluxo, apenas esconde visualmente */
+}
+
+.fab-menu li {
+    background: var(--card-bg);
+    color: var(--text-main);
+    padding: 10px 16px;
+    border-radius: 20px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    transition: background 0.2s;
+}
+
+.fab-menu li:hover {
+    background: #f0f0f0;
+}
+
+.fab-menu li i {
+    font-size: 1.2rem;
+    color: var(--primary-color);
+}
+
+.fab-btn {
+    background-color: var(--primary-color);
+    color: white;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    border: none;
+    font-size: 2rem;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    cursor: pointer;
+    transition: transform 0.3s, background-color 0.3s;
+}
+
+.fab-btn.open {
+    transform: rotate(45deg);
+    background-color: var(--danger-color);
+}
+
+/* Modals */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    padding: 1rem;
+}
+
+.modal-content {
+    background: var(--card-bg);
+    width: 100%;
+    max-width: 440px;
+    border-radius: 12px;
+    padding: 1.5rem;
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.close-modal {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+}
+
+/* --- Cards Carousel & Premium Credit Cards --- */
+.cards-carousel {
+    display: flex;
+    overflow-x: auto;
+    gap: 15px;
+    padding: 10px 5px;
+    scroll-snap-type: x mandatory;
+    margin-bottom: 20px;
+}
+
+.cards-carousel::-webkit-scrollbar {
+    height: 6px;
+}
+
+.cards-carousel::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 4px;
+}
+
+.credit-card {
+    min-width: 280px;
+    height: 160px;
+    border-radius: 16px;
+    padding: 20px;
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    scroll-snap-align: start;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.credit-card:hover,
+.credit-card.selected {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.25);
+    border: 2px solid rgba(255, 255, 255, 0.8);
+}
+
+.credit-card::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -20%;
+    width: 200px;
+    height: 200px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    pointer-events: none;
+}
+
+.card-name {
+    font-size: 1.1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    z-index: 1;
+}
+
+.card-chip {
+    width: 40px;
+    height: 30px;
+    background: linear-gradient(135deg, #e6c27a, #ffd700, #d4af37);
+    border-radius: 5px;
+    z-index: 1;
+    opacity: 0.9;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+.card-balance {
+    font-size: 1.5rem;
+    font-weight: 700;
+    z-index: 1;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.card-footer {
+    font-size: 0.8rem;
+    opacity: 0.8;
+    z-index: 1;
+}
+
+/* --- Matriz de Parcelas --- */
+.table-responsive {
+    overflow-x: auto;
+    border-radius: 8px;
+    background: white;
+    box-shadow: inset 0 0 10px rgba(0, 0, 0, 0.02);
+}
+
+.installments-matrix {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.installments-matrix th,
+.installments-matrix td {
+    padding: 12px 10px;
+    text-align: right;
+    border-bottom: 1px solid #f0f0f0;
+    white-space: nowrap;
+}
+
+.installments-matrix th {
+    background: #fbfbfb;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.installments-matrix th:first-child,
+.installments-matrix td:first-child {
+    text-align: left;
+    position: sticky;
+    left: 0;
+    background: white;
+    box-shadow: 2px 0 5px rgba(0, 0, 0, 0.05);
+    font-weight: 500;
+    z-index: 2;
+}
+
+.installments-matrix th:first-child {
+    background: #fbfbfb;
+}
+
+.installments-matrix tr.matrix-footer td {
+    font-weight: 700;
+    background: #f5f5f5;
+    color: var(--primary-color);
+}
+
+.installments-matrix tr:hover td:not(.matrix-footer td) {
+    background: #fafafa;
+}

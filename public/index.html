@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Projeto A2 - Governança Financeira</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+</head>
+<body>
+
+    <!-- Container de Login -->
+    <div id="login-screen" class="screen active">
+        <div class="login-box">
+            <h1>Projeto A2</h1>
+            <p>Governança Financeira</p>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="email">E-mail</label>
+                    <input type="email" id="email" required placeholder="Digite seu e-mail" autocomplete="username">
+                </div>
+                <div class="input-group">
+                    <label for="password">Senha</label>
+                    <input type="password" id="password" required placeholder="Sua senha" autocomplete="current-password">
+                </div>
+                <button type="submit" class="btn-primary" id="btn-login">Entrar</button>
+            </form>
+            <p id="auth-error" class="error-msg hidden">Credenciais inválidas.</p>
+        </div>
+    </div>
+
+    <!-- Dashboard Principal -->
+    <div id="app-screen" class="screen hidden">
+        <header class="app-header">
+            <div>
+                <h2 id="header-title">Olá, <span id="user-name-display">Usuário</span></h2>
+                <p id="current-month-display">Mês de ...</p>
+                <button id="btn-settings" class="btn-secondary" style="margin-top: 8px; font-size: 0.8rem; border-color: white; color: white;">Configurar Mês</button>
+            </div>
+            <button id="btn-logout" class="btn-text">Sair</button>
+        </header>
+
+        <main class="app-content" id="dashboard-screen-content">
+            <!-- Card de Visão Geral do Mês -->
+            <section class="card summary-card">
+                <h3>Saldo Disponível</h3>
+                <h1 id="available-balance">R$ 0,00</h1>
+                <div class="progress-bar-container">
+                    <div class="progress-bar" id="budget-progress" style="width: 0%;"></div>
+                </div>
+                <!-- Miniaturas de indicadores -->
+                <div class="summary-details">
+                    <div class="detail-item">
+                        <span>Receita</span>
+                        <strong id="total-income">R$ 0,00</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>Guardar</span>
+                        <strong id="savings-goal">R$ 0,00</strong>
+                    </div>
+                    <div class="detail-item">
+                        <span>P/ Projeto</span>
+                        <strong id="project-contribution">R$ 0,00</strong>
+                    </div>
+                </div>
+            </section>
+
+                <!-- Minimizar este card apenas para o total -->
+                <div style="display: flex; justify-content: space-between; align-items: center; background: var(--card-bg); padding: 1rem; border-radius: 12px; margin-bottom: 1rem; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                    <h3 style="font-size: 1rem;">Fixos & Parcelas Comprometidos:</h3>
+                    <strong id="committed-total" class="text-danger" style="font-size: 1.1rem;">R$ 0,00</strong>
+                </div>
+
+                <!-- Gráficos no Dash (Movidos da aba Relatório) -->
+                <section class="card" style="margin-bottom: 1rem;">
+                    <div class="card-header">
+                        <h3 style="font-size: 1rem;">Gastos vs Orçamento</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="budgetChart" height="200"></canvas>
+                    </div>
+                </section>
+                <section class="card" style="margin-bottom: 1rem;">
+                    <div class="card-header">
+                        <h3 style="font-size: 1rem;">Gastos por Categoria</h3>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="categoryChart" height="200"></canvas>
+                    </div>
+                </section>
+
+            <!-- Card Gastos Semanais (Variável) -->
+            <section class="card">
+                <div class="card-header">
+                    <h3>Gastos da Semana</h3>
+                    <h3 id="week-spent">R$ 0,00</h3>
+                </div>
+                <div class="card-body">
+                    <ul id="variable-expense-list" class="expense-list">
+                        <!-- Itens renderizados no JS -->
+                        <li class="empty-state">Nenhum gasto registrado.</li>
+                    </ul>
+                </div>
+            </section>
+            <!-- Fim Dashboard Individual -->
+        </main>
+
+        <!-- Tela de Auditoria -->
+        <main class="app-content hidden" id="audit-screen-content">
+            <section class="card">
+                <div class="card-header">
+                    <h3>Auditoria da Semana</h3>
+                    <strong class="text-main" id="audit-partner-name">Parceiro(a)</strong>
+                </div>
+                <div class="card-body">
+                    <p class="text-muted" style="margin-bottom:1rem;">Revise os gastos variáveis desta semana.</p>
+                    <ul id="audit-expense-list" class="expense-list">
+                        <li class="empty-state">Nenhum gasto para auditar.</li>
+                    </ul>
+                </div>
+            </section>
+        </main>
+
+        <!-- Tela Parcelas / Cartões -->
+        <main class="app-content hidden" id="installments-screen-content">
+            <h3 style="margin-bottom: 1rem;">Meus Cartões & Fontes</h3>
+            
+            <!-- Carrossel de Cartões (Scroll Horizontal) -->
+            <div class="cards-carousel" id="sources-carousel">
+                <!-- Cartão Geral (Soma Tudo) -->
+                <div class="credit-card" style="background: linear-gradient(135deg, #333, #000);" onclick="selectSource('all')">
+                    <div class="card-name">Visão Geral</div>
+                    <div class="card-chip"></div>
+                    <div class="card-balance">R$ 0,00</div>
+                    <div class="card-footer">Fatura Atual</div>
+                </div>
+                <!-- Cartões dinâmicos entram aqui pelo JS -->
+            </div>
+
+            <section class="card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h3 id="inst-table-title">Próximos Meses (Todas as Fontes)</h3>
+                </div>
+                <div class="card-body" style="padding: 0;">
+                    <!-- Tabela Dinâmica Matriz -->
+                    <div class="table-responsive">
+                        <table class="installments-matrix" id="matrix-table">
+                            <thead id="matrix-head">
+                                <!-- Preenchido dinamicamente (Meses) -->
+                            </thead>
+                            <tbody id="matrix-body">
+                                <!-- Preenchido dinamicamente (Despesas) -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Tela Casal -->
+        <main class="app-content hidden" id="couple-screen-content">
+            <section class="card summary-card">
+                <h3>Renda Total (Nós)</h3>
+                <h1 id="couple-total-income">R$ 0,00</h1>
+            </section>
+            
+            <section class="card">
+                <div class="card-header">
+                    <h3>Projeto Casamento</h3>
+                </div>
+                <div class="card-body">
+                    <div class="summary-details" style="border-top: none; padding-top: 0; margin-top: 0;">
+                        <div class="detail-item">
+                            <span>Sua Parte</span>
+                            <strong id="couple-my-project">R$ 0,00</strong>
+                        </div>
+                        <div class="detail-item">
+                            <span>Parceiro(a)</span>
+                            <strong id="couple-partner-project">R$ 0,00</strong>
+                        </div>
+                    </div>
+                    <div style="margin-top: 1rem; text-align: center;">
+                        <span class="text-muted">Total Guardado Este Mês</span>
+                        <h2 class="text-main" id="couple-total-saved" style="margin-top:0.5rem;">R$ 0,00</h2>
+                    </div>
+                </div>
+            </section>
+            
+            <!-- Visão Consolidada do Parceiro -->
+            <section class="card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h3 id="casal-partner-title">Resumo do Parceiro</h3>
+                </div>
+                <div class="card-body">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span class="text-muted">Renda Declarada</span>
+                        <strong id="casal-partner-income">R$ 0,00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span class="text-muted">Fixos & Parcelas (Comprometido)</span>
+                        <strong id="casal-partner-fixed" class="text-danger">R$ 0,00</strong>
+                    </div>
+                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span class="text-muted">Gastos (Váriaveis do Mês)</span>
+                        <strong id="casal-partner-variable" class="text-danger">R$ 0,00</strong>
+                    </div>
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0;">
+                         <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="text-muted">Saldo Livre Estimado</span>
+                            <strong id="casal-partner-available" class="text-main" style="font-size: 1.2rem;">R$ 0,00</strong>
+                         </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        </main>
+
+        <!-- Botão Flutuante (Menu Ações) -->
+        <div class="fab-container">
+            <!-- Menu escondido que abre ao clicar no + -->
+            <ul class="fab-menu hidden" id="fab-menu">
+                <li data-action="expense"><i class="ph ph-receipt"></i> Gasto Variável</li>
+                <li data-action="installment"><i class="ph ph-credit-card"></i> Parcela</li>
+                <li data-action="subscription"><i class="ph ph-arrows-clockwise"></i> Assinatura (Fixo em Cartão)</li>
+                <li data-action="fixed"><i class="ph ph-house-line"></i> Despesa Fixa (Mês)</li>
+                <li data-action="source"><i class="ph ph-wallet"></i> Criar Cartão</li>
+            </ul>
+            <button class="fab-btn" id="btn-fab-main"><i class="ph ph-plus"></i></button>
+        </div>
+
+        <!-- Navegação Inferior (Somente Ícones) -->
+        <nav class="bottom-nav">
+            <button class="nav-item active" data-target="dashboard">
+                <i class="ph ph-squares-four"></i>
+            </button>
+            <button class="nav-item" data-target="parcelas">
+                <i class="ph ph-credit-card"></i>
+            </button>
+            <button class="nav-item" data-target="auditoria">
+                <i class="ph ph-magnifying-glass"></i>
+            </button>
+            <button class="nav-item" data-target="casal">
+                <i class="ph ph-users"></i>
+            </button>
+        </nav>
+    </div>
+
+    <div id="modal-settings" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Configurar Mês</h3>
+                <button class="close-modal" data-modal="modal-settings">&times;</button>
+            </div>
+            <form id="form-settings">
+                <div class="input-group">
+                    <label>Renda Mensal (R$)</label>
+                    <input type="number" id="setting-income" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Meta de Poupança (R$)</label>
+                    <input type="number" id="setting-savings" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Proj. Casamento (R$)</label>
+                    <input type="number" id="setting-project" step="0.01" required>
+                </div>
+                <button type="submit" class="btn-primary w-100">Salvar Configurações</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-add-source" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Novo Cartão/Conta</h3>
+                <button class="close-modal" data-modal="modal-add-source">&times;</button>
+            </div>
+            <form id="form-add-source">
+                <div class="input-group">
+                    <label>Nome do Cartão (Ex: Nubank)</label>
+                    <input type="text" id="source-name" required>
+                </div>
+                <div class="input-group">
+                    <label>Cor do Cartão</label>
+                    <input type="color" id="source-color" value="#8A05BE" style="width: 100%; height: 40px; cursor: pointer;">
+                </div>
+                <button type="submit" class="btn-primary w-100">Criar Cartão</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modais de Lançamento -->
+    <div id="modal-add-expense" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Novo Gasto Variável</h3>
+                <button class="close-modal" data-modal="modal-add-expense">&times;</button>
+            </div>
+            <form id="form-add-expense">
+                <div class="input-group">
+                    <label>Fonte / Cartão</label>
+                    <select id="expense-source" required>
+                        <!-- Preenchido via JS -->
+                        <option value="" disabled selected>Carregando...</option>
+                    </select>
+                </div>
+                <div style="text-align:right; margin-bottom:1rem;">
+                    <a href="#" class="text-main link-new-source" style="font-size: 0.8rem;">+ Criar Cartão</a>
+                </div>
+                <div class="input-group">
+                    <label>Descrição</label>
+                    <input type="text" id="expense-desc" required>
+                </div>
+                <div class="input-group">
+                    <label>Valor (R$)</label>
+                    <input type="number" id="expense-amount" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Categoria</label>
+                    <select id="expense-category">
+                        <option value="Lazer">Lazer</option>
+                        <option value="Mercado">Mercado</option>
+                        <option value="Transporte">Transporte</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </div>
+                <button type="submit" class="btn-primary w-100">Registrar</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-add-fixed" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nova Despesa Fixa (S/ Cartão)</h3>
+                <button class="close-modal" data-modal="modal-add-fixed">&times;</button>
+            </div>
+            <form id="form-add-fixed">
+                <div class="input-group">
+                    <label>Nome da Despesa Fixa (Ex: Luz)</label>
+                    <input type="text" id="fixed-name" required>
+                </div>
+                <div class="input-group">
+                    <label>Valor Mensal Estimado (R$)</label>
+                    <input type="number" id="fixed-amount" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Dia de Vencimento</label>
+                    <input type="number" id="fixed-due" min="1" max="31" required>
+                </div>
+                <button type="submit" class="btn-primary w-100">Registrar Fixo</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-add-subscription" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nova Assinatura Mensal</h3>
+                <button class="close-modal" data-modal="modal-add-subscription">&times;</button>
+            </div>
+            <form id="form-add-subscription">
+                <div class="input-group">
+                    <label>Cartão / Fonte</label>
+                    <select id="sub-source" required>
+                         <option value="" disabled selected>Carregando...</option>
+                    </select>
+                </div>
+                <div style="text-align:right; margin-bottom:1rem;">
+                    <a href="#" class="text-main link-new-source" style="font-size: 0.8rem;">+ Criar Cartão</a>
+                </div>
+                <div class="input-group">
+                    <label>Nome (Ex: Netflix)</label>
+                    <input type="text" id="sub-name" required>
+                </div>
+                <div class="input-group">
+                    <label>Valor Mensal (R$)</label>
+                    <input type="number" id="sub-amount" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Dia de Cobrança (Fatura/Débito)</label>
+                    <input type="number" id="sub-due" min="1" max="31" required>
+                </div>
+                <button type="submit" class="btn-primary w-100">Registrar Assinatura</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-add-installment" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Nova Parcela</h3>
+                <button class="close-modal" data-modal="modal-add-installment">&times;</button>
+            </div>
+            <form id="form-add-installment">
+                <div class="input-group">
+                    <label>Cartão / Fonte</label>
+                    <select id="inst-source" required>
+                         <!-- Preenchido via JS -->
+                         <option value="" disabled selected>Carregando...</option>
+                    </select>
+                </div>
+                <div style="text-align:right; margin-bottom:1rem;">
+                    <a href="#" class="text-main link-new-source" style="font-size: 0.8rem;">+ Criar Cartão</a>
+                </div>
+                <div class="input-group">
+                    <label>Nome (Dívida)</label>
+                    <input type="text" id="inst-name" required>
+                </div>
+                <div class="input-group">
+                    <label>Valor Total (Opcional R$)</label>
+                    <input type="number" id="inst-totalAmount" step="0.01">
+                </div>
+                <div class="input-group">
+                    <label>Valor da Parcela (R$)</label>
+                    <input type="number" id="inst-amount" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Número de Parcelas Restantes</label>
+                    <input type="number" id="inst-remaining" min="1" required>
+                </div>
+                <button type="submit" class="btn-primary w-100">Registrar Parcela</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Scripts em Módulos -->
+    <script type="module" src="js/firebase-config.js"></script>
+    <script type="module" src="js/auth.js"></script>
+    <script type="module" src="js/app.js"></script>
+</body>
+</html>

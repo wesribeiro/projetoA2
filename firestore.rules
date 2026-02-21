@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Função para verificar se está autenticado
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Função para verificar se o usuário é Admin (via custom claim)
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.role == "admin";
+    }
+
+    // Função para verificar se a requisição é do dono do recurso
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Função para verificar se o requisitante é o parceiro definido no profile
+    function isPartner(userId) {
+      return isAuthenticated() && 
+        get(/databases/$(database)/documents/users/$(userId)).data.partnerId == request.auth.uid;
+    }
+
+    // Regras da base global de usuários
+    match /users/{userId} {
+      
+      // Permite ler o profile se for o próprio usuário, parceiro ou admin
+      allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+      
+      // Escrita no nó raiz do profile permitida apenas para o dono ou admin
+      allow write: if isOwner(userId) || isAdmin();
+
+      // Regras de meses e subcoleções
+      match /months/{monthId} {
+        
+        // Leitura permitida para o dono e o parceiro
+        allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+        
+        // Escrita no mês apenas se for o dono, e o mês não estiver fechado (closed == true)
+        // Permite a criação do mês se não existir ainda.
+        allow create: if isOwner(userId);
+        allow update: if isOwner(userId) && (!resource.data.keys().hasAll(['closed']) || resource.data.closed == false);
+        allow delete: if isAdmin(); // Meses não podem ser deletados pelo usuário final
+
+        // Regras das sub-coleções financeiras e auditorias dentro do escopo do mês
+        
+        match /fixedExpenses/{docId} {
+          allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+          allow write: if isOwner(userId) && get(/databases/$(database)/documents/users/$(userId)/months/$(monthId)).data.closed != true;
+        }
+
+        match /installments/{docId} {
+          allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+          allow write: if isOwner(userId) && get(/databases/$(database)/documents/users/$(userId)/months/$(monthId)).data.closed != true;
+        }
+
+        match /variableExpenses/{docId} {
+          allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+          allow write: if isOwner(userId) && get(/databases/$(database)/documents/users/$(userId)/months/$(monthId)).data.closed != true;
+        }
+
+        match /auditLogs/{docId} {
+          // Auditoria: O dono do mês (auditado) e o parceiro (auditor) podem ler.
+          allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+          
+          // Auditoria: APENAS o parceiro (auditor) pode escrever. Dono não pode alterar/criar.
+          allow write: if isPartner(userId) || isAdmin();
+        }
+      }
+
+      // Regras de Fontes Financeiras (Criado na Fase 3)
+      match /sources/{docId} {
+        allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
+      }
+    }
+  }
+}
