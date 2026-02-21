@@ -203,51 +203,57 @@ async function loadDashboardData() {
         // 2. Busca Despesas Fixas e Parcelas
         const fixos = await getFixedExpenses(currentUserId);
         const parcelas = await getInstallments(currentUserId);
-        
+
         let totalCommitted = 0;
         const fixedListContainer = document.getElementById('fixed-expense-list');
-        if(fixedListContainer) fixedListContainer.innerHTML = '';
-        
+
+        // Agrupar fixos + parcelas por fonte (source) para exibição no dashboard
+        const sourceMap = {};
+
         fixos.forEach(f => {
             const amount = Number(f.amount);
             totalCommitted += amount;
-            
-            if(fixedListContainer) {
-                const li = document.createElement('li');
-                li.style.cursor = 'pointer';
-                li.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
-                        <span><strong>${f.name}</strong> <span class="text-muted">(${f.isSubscription ? 'Assinatura' : 'Fixo'}) ${f.sourceName ? ` - ${f.sourceName}` : ''}</span></span>
-                        <strong class="text-danger">${formatCurrency(amount)}</strong>
-                    </div>
-                `;
-                li.addEventListener('click', () => openEditModal({ ...f, type: 'fixedExpenses' }));
-                fixedListContainer.appendChild(li);
-            }
+            const key = f.sourceId || '__sem_fonte__';
+            const label = f.sourceName || 'Sem Fonte';
+            if (!sourceMap[key]) sourceMap[key] = { label, total: 0, items: [] };
+            sourceMap[key].total += amount;
         });
-        
-        parcelas.forEach(p => {
-            const amount = Number(p.amount || p.installmentAmount || 0);
-            totalCommitted += amount;
 
-            if(fixedListContainer) {
-                const li = document.createElement('li');
-                li.style.cursor = 'pointer';
-                li.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
-                        <span><strong>${p.name || p.description}</strong> <span class="text-muted">(Parcela ${p.remainingInstallments}x) ${p.sourceName ? ` - ${p.sourceName}` : ''}</span></span>
-                        <strong class="text-danger">${formatCurrency(amount)}</strong>
-                    </div>
-                `;
-                li.addEventListener('click', () => openEditModal({ ...p, type: 'installments' }));
-                fixedListContainer.appendChild(li);
-            }
+        parcelas.forEach(p => {
+            const amount = Number(p.installmentAmount || p.amount || 0);
+            totalCommitted += amount;
+            const key = p.sourceId || '__sem_fonte__';
+            const label = p.sourceName || 'Sem Fonte';
+            if (!sourceMap[key]) sourceMap[key] = { label, total: 0, items: [] };
+            sourceMap[key].total += amount;
         });
-        
-        if (fixedListContainer && fixedListContainer.children.length === 0) {
-            fixedListContainer.innerHTML = '<li class="empty-state text-muted">Nenhuma despesa ou parcela no mês.</li>';
+
+        if (fixedListContainer) {
+            fixedListContainer.innerHTML = '';
+            const sourceEntries = Object.values(sourceMap);
+            if (sourceEntries.length === 0) {
+                fixedListContainer.innerHTML = '<li class="empty-state text-muted">Nenhuma despesa fixa ou parcela cadastrada.</li>';
+            } else {
+                sourceEntries
+                    .sort((a, b) => b.total - a.total)
+                    .forEach(({ label, total }) => {
+                        const li = document.createElement('li');
+                        li.className = 'expense-item';
+                        li.innerHTML = `
+                            <div class="expense-item-left">
+                                <div class="expense-category-dot" style="background: var(--primary-dark)"></div>
+                                <div class="expense-item-info">
+                                    <span class="expense-item-name">${label}</span>
+                                    <span class="expense-item-meta">Fixos + Parcelas este mês</span>
+                                </div>
+                            </div>
+                            <span class="expense-item-amount" style="color: var(--danger-color)">${formatCurrency(total)}</span>
+                        `;
+                        fixedListContainer.appendChild(li);
+                    });
+            }
         }
-        
+
         const fixedSpentEl = document.getElementById('fixed-spent');
         if(fixedSpentEl) fixedSpentEl.textContent = formatCurrency(totalCommitted);
         // 3. Busca Gastos Variáveis
@@ -1198,23 +1204,37 @@ window.selectSource = function(sourceId) {
     });
 
     if(allItems.length === 0) {
-        bodyHtml = '<tr><td colspan="7" class="text-center text-muted">Nenhuma fatura encontrada.</td></tr>';
+        bodyHtml = '<tr><td colspan="8" class="text-center text-muted" style="padding: 1.5rem;">Nenhuma fatura encontrada.</td></tr>';
     } else {
         allItems.forEach(item => {
             const name = item.description || item.name;
             const source = item.sourceName || 'Sem Fonte';
             const isInst = item.type === 'Parcela';
             const val = Number(item.installmentAmount || item.amount);
+            const typeLabel = isInst ? `${item.remainingInstallments}x parcelas` : 'Assinatura';
+            const itemType = isInst ? 'installments' : 'fixedExpenses';
 
-            bodyHtml += `<tr><td><strong>${name}</strong><br><small class="text-muted">${source}</small></td>`;
+            bodyHtml += `<tr>
+                <td>
+                    <strong>${name}</strong>
+                    <br><small class="text-muted">${source} · ${typeLabel}</small>
+                    <br>
+                    <span
+                        onclick="window._editMatrixItem('${item.id}', '${itemType}')"
+                        style="font-size:0.72rem; color: var(--secondary-color); cursor:pointer; margin-right:8px;"
+                    >✏️ Editar</span>
+                    <span
+                        onclick="window._deleteMatrixItem('${item.id}', '${itemType}')"
+                        style="font-size:0.72rem; color: var(--danger-color); cursor:pointer;"
+                    >🗑️ Excluir</span>
+                </td>`;
 
             for (let i = 0; i < 6; i++) {
-                // Checar se a dívida atinge esse mês 'i'
                 let isActive = false;
                 if (isInst) {
                     if (i < item.remainingInstallments) isActive = true;
                 } else {
-                    isActive = true; // Assinaturas são contínuas
+                    isActive = true;
                 }
 
                 if (isActive) {
@@ -1227,7 +1247,6 @@ window.selectSource = function(sourceId) {
             bodyHtml += '</tr>';
         });
 
-        // Footers Totais Columns
         bodyHtml += `<tr class="matrix-footer"><td>Total do Mês</td>`;
         for (let i = 0; i < 6; i++) {
             bodyHtml += `<td>${formatCurrency(colTotals[i])}</td>`;
@@ -1236,8 +1255,39 @@ window.selectSource = function(sourceId) {
     }
 
     if(tbody) tbody.innerHTML = bodyHtml;
+    // Drag events are for mouse-only; touch scroll handled natively via CSS
     if(typeof rebindDragEvents === 'function') rebindDragEvents();
 }
+
+// Handlers globais para editar/excluir itens da Matriz de Faturas
+window._editMatrixItem = function(id, type) {
+    const cacheToSearch = type === 'installments' ? cacheInstallments : cacheFixed;
+    const found = cacheToSearch.find(item => item.id === id);
+    if (found) {
+        openEditModal({ ...found, type });
+    } else {
+        showToast('Item não encontrado no cache. Recarregue a tela.', 'error');
+    }
+};
+
+window._deleteMatrixItem = async function(id, type) {
+    const cacheToSearch = type === 'installments' ? cacheInstallments : cacheFixed;
+    const found = cacheToSearch.find(item => item.id === id);
+    const name = found ? (found.description || found.name || 'este item') : 'este item';
+
+    const confirmed = window.confirm(`Excluir "${name}"? Esta ação é irreversível.`);
+    if (!confirmed) return;
+
+    try {
+        await deleteExpense(currentUserId, id, type);
+        showToast(`"${name}" excluído com sucesso.`, 'success');
+        await loadInstallmentsScreen();
+        await loadDashboardData();
+    } catch(err) {
+        console.error('Erro ao excluir item:', err);
+        showToast('Erro ao excluir. Tente novamente.', 'error');
+    }
+};
 
 // ==========================================
 // 7. RELATÓRIOS E GRÁFICOS (FASE 3)
