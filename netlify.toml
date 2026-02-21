@@ -1,0 +1,9 @@
+[build]
+  # Define o diretório a ser publicado (onde está o index.html)
+  publish = "public"
+
+# Redirecionamento básico para Single Page Applications (SPA)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
