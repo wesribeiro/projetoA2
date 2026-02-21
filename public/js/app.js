@@ -209,34 +209,41 @@ async function loadDashboardData() {
 
         // Agrupar fixos + parcelas por fonte (source) para exibição no dashboard
         const sourceMap = {};
+        const allDespesaItems = []; // lista detalhada para o accordion
+
+        const currentMonthName = new Date().toLocaleString('pt-BR', { month: 'long' });
 
         fixos.forEach(f => {
             const amount = Number(f.amount);
             totalCommitted += amount;
-            const key = f.sourceId || '__sem_fonte__';
-            const label = f.sourceName || 'Sem Fonte';
-            if (!sourceMap[key]) sourceMap[key] = { label, total: 0, items: [] };
+            const key = f.sourceId || '__despesas_fixas__';
+            const label = f.sourceName || 'Despesas Fixas';
+            const meta = f.sourceId ? 'Parcelas e assinaturas' : `Despesas de ${currentMonthName}`;
+            if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0 };
             sourceMap[key].total += amount;
+            allDespesaItems.push({ label: f.name, meta: `${label} · ${f.isSubscription ? 'Assinatura' : 'Fixo'}`, amount, type: 'fixedExpenses', id: f.id });
         });
 
         parcelas.forEach(p => {
             const amount = Number(p.installmentAmount || p.amount || 0);
             totalCommitted += amount;
-            const key = p.sourceId || '__sem_fonte__';
-            const label = p.sourceName || 'Sem Fonte';
-            if (!sourceMap[key]) sourceMap[key] = { label, total: 0, items: [] };
+            const key = p.sourceId || '__despesas_fixas__';
+            const label = p.sourceName || 'Despesas Fixas';
+            const meta = p.sourceId ? 'Parcelas e assinaturas' : `Despesas de ${currentMonthName}`;
+            if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0 };
             sourceMap[key].total += amount;
+            allDespesaItems.push({ label: p.description || p.name, meta: `${label} · ${p.remainingInstallments}x`, amount, type: 'installments', id: p.id });
         });
 
         if (fixedListContainer) {
             fixedListContainer.innerHTML = '';
             const sourceEntries = Object.values(sourceMap);
             if (sourceEntries.length === 0) {
-                fixedListContainer.innerHTML = '<li class="empty-state text-muted">Nenhuma despesa fixa ou parcela cadastrada.</li>';
+                fixedListContainer.innerHTML = '<li class="empty-state text-muted" style="padding:1rem;">Nenhuma despesa fixa ou parcela cadastrada.</li>';
             } else {
                 sourceEntries
                     .sort((a, b) => b.total - a.total)
-                    .forEach(({ label, total }) => {
+                    .forEach(({ label, meta, total }) => {
                         const li = document.createElement('li');
                         li.className = 'expense-item';
                         li.innerHTML = `
@@ -244,13 +251,38 @@ async function loadDashboardData() {
                                 <div class="expense-category-dot" style="background: var(--primary-dark)"></div>
                                 <div class="expense-item-info">
                                     <span class="expense-item-name">${label}</span>
-                                    <span class="expense-item-meta">Fixos + Parcelas este mês</span>
+                                    <span class="expense-item-meta">${meta}</span>
                                 </div>
                             </div>
                             <span class="expense-item-amount" style="color: var(--danger-color)">${formatCurrency(total)}</span>
                         `;
                         fixedListContainer.appendChild(li);
                     });
+            }
+        }
+
+        // Preenche a lista expandida (accordion detail)
+        const detailList = document.getElementById('fixed-expense-detail');
+        if (detailList) {
+            detailList.innerHTML = '';
+            if (allDespesaItems.length === 0) {
+                detailList.innerHTML = '<li class="empty-state text-muted" style="padding:1rem;">Nenhum item.</li>';
+            } else {
+                allDespesaItems.forEach(item => {
+                    const li = document.createElement('li');
+                    li.className = 'expense-item';
+                    li.innerHTML = `
+                        <div class="expense-item-left">
+                            <div class="expense-category-dot" style="background: var(--secondary-color)"></div>
+                            <div class="expense-item-info">
+                                <span class="expense-item-name">${item.label}</span>
+                                <span class="expense-item-meta">${item.meta}</span>
+                            </div>
+                        </div>
+                        <span class="expense-item-amount" style="color: var(--danger-color)">${formatCurrency(item.amount)}</span>
+                    `;
+                    detailList.appendChild(li);
+                });
             }
         }
 
@@ -367,6 +399,27 @@ async function loadDashboardData() {
 function formatCurrency(value) {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
+
+// ==========================================
+// Dashboard: Accordion "Despesas"
+// ==========================================
+window.toggleDespesasAccordion = function() {
+    const detailWrap = document.getElementById('despesas-detail-wrap');
+    const chevron = document.getElementById('despesas-chevron');
+    const subtitle = document.getElementById('despesas-subtitle');
+    if (!detailWrap) return;
+
+    const isOpen = !detailWrap.classList.contains('hidden');
+    if (isOpen) {
+        detailWrap.classList.add('hidden');
+        if (chevron) chevron.style.transform = 'rotate(0deg)';
+        if (subtitle) subtitle.textContent = 'Clique para detalhar';
+    } else {
+        detailWrap.classList.remove('hidden');
+        if (chevron) chevron.style.transform = 'rotate(180deg)';
+        if (subtitle) subtitle.textContent = 'Clique para recolher';
+    }
+};
 
 // ==========================================
 // 3. LÓGICA DE MODAIS E FAB (AÇÃO)
@@ -1142,152 +1195,270 @@ function renderSourcesCarousel() {
     if(typeof rebindDragEvents === 'function') rebindDragEvents();
 }
 
+// Current sort key for the installments list
+let _matrixSortKey = 'source';
+
 // O HTML usa onclick="selectSource(...)", por isso precisamos expor no window
 window.selectSource = function(sourceId) {
     const titleEl = document.getElementById('inst-table-title');
-    const thead = document.getElementById('matrix-head');
-    const tbody = document.getElementById('matrix-body');
-    
-    let sourceName = "Todas as Fontes";
+
+    let sourceName = 'Todas as Fontes';
     if (sourceId !== 'all') {
         const found = cacheSources.find(s => s.id === sourceId);
         if (found) sourceName = found.name;
     }
-    titleEl.textContent = `Matriz de Faturas (${sourceName})`;
+    titleEl.textContent = `${sourceName}`;
 
-    // Filtrar dados da fonte selecionada
-    const filteredInst = sourceId === 'all' 
-        ? cacheInstallments 
+    // Filtrar
+    const filteredInst = sourceId === 'all'
+        ? cacheInstallments
         : cacheInstallments.filter(p => p.sourceId === sourceId);
-    
-    const filteredFixed = sourceId === 'all'
+
+    const filteredFixed = (sourceId === 'all'
         ? cacheFixed
-        : cacheFixed.filter(f => f.sourceId === sourceId);
+        : cacheFixed.filter(f => f.sourceId === sourceId)
+    ).filter(f => f.sourceId || sourceId !== 'all');
 
-    // Junta tudo numa lista só
+    // Junta numa lista
     const allItems = [];
-    filteredInst.forEach(p => allItems.push({ type: 'Parcela', ...p }));
+    filteredInst.forEach(p => allItems.push({ type: 'installments', ...p }));
     filteredFixed.forEach(f => {
-        // Na tela de Cartões, mostramos só as despesas "Assinaturas" atreladas a cartões (têm sourceId).
-        // Se formos exibir Despesas Fixas sem cartão (ex: Conta de Luz), ignorar se sourceId === 'all'.
-        if(f.sourceId || sourceId === 'all') {
-            if(sourceId === 'all' && !f.sourceId) return; // Oculta contas sem cartão da visão de faturas
-            allItems.push({ type: 'Assinatura', ...f });
-        }
+        if (sourceId === 'all' && !f.sourceId) return;
+        allItems.push({ type: 'fixedExpenses', ...f });
     });
 
-    const now = new Date();
-    const monthNames = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
-    
-    // Configurar Cabeçalho (Meses)
-    let headHtml = '<tr><th>Despesa / Fonte</th>';
-    for (let i = 0; i < 6; i++) {
-        const projDate = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        headHtml += `<th>${monthNames[projDate.getMonth()]} ${projDate.getFullYear()}</th>`;
-    }
-    headHtml += '</tr>';
-    if(thead) thead.innerHTML = headHtml;
+    // Store globally for the months modal
+    window._currentMatrixItems = allItems;
 
-    // Configurar Corpo (Linhas por Despesa)
-    let bodyHtml = '';
-    const colTotals = [0, 0, 0, 0, 0, 0];
+    renderMatrixList(allItems);
+};
 
-    // Ordenar itens por Nome da Fonte e depois Descrição
-    allItems.sort((a, b) => {
-        const sourceA = a.sourceName || '';
-        const sourceB = b.sourceName || '';
-        if(sourceA < sourceB) return -1;
-        if(sourceA > sourceB) return 1;
-        const nameA = a.description || a.name || '';
-        const nameB = b.description || b.name || '';
-        return nameA.localeCompare(nameB);
-    });
+function renderMatrixList(items) {
+    const listEl = document.getElementById('matrix-list');
+    if (!listEl) return;
 
-    if(allItems.length === 0) {
-        bodyHtml = '<tr><td colspan="8" class="text-center text-muted" style="padding: 1.5rem;">Nenhuma fatura encontrada.</td></tr>';
+    // Sort
+    const sorted = [...items];
+    if (_matrixSortKey === 'name') {
+        sorted.sort((a, b) => (a.description || a.name || '').localeCompare(b.description || b.name || ''));
+    } else if (_matrixSortKey === 'price') {
+        sorted.sort((a, b) => Number(b.installmentAmount || b.amount || 0) - Number(a.installmentAmount || a.amount || 0));
     } else {
-        allItems.forEach(item => {
-            const name = item.description || item.name;
-            const source = item.sourceName || 'Sem Fonte';
-            const isInst = item.type === 'Parcela';
-            const val = Number(item.installmentAmount || item.amount);
-            const typeLabel = isInst ? `${item.remainingInstallments}x parcelas` : 'Assinatura';
-            const itemType = isInst ? 'installments' : 'fixedExpenses';
-
-            bodyHtml += `<tr>
-                <td>
-                    <strong>${name}</strong>
-                    <br><small class="text-muted">${source} · ${typeLabel}</small>
-                    <br>
-                    <span
-                        onclick="window._editMatrixItem('${item.id}', '${itemType}')"
-                        style="font-size:0.72rem; color: var(--secondary-color); cursor:pointer; margin-right:8px;"
-                    >✏️ Editar</span>
-                    <span
-                        onclick="window._deleteMatrixItem('${item.id}', '${itemType}')"
-                        style="font-size:0.72rem; color: var(--danger-color); cursor:pointer;"
-                    >🗑️ Excluir</span>
-                </td>`;
-
-            for (let i = 0; i < 6; i++) {
-                let isActive = false;
-                if (isInst) {
-                    if (i < item.remainingInstallments) isActive = true;
-                } else {
-                    isActive = true;
-                }
-
-                if (isActive) {
-                    bodyHtml += `<td>${formatCurrency(val)}</td>`;
-                    colTotals[i] += val;
-                } else {
-                    bodyHtml += `<td class="text-muted" style="opacity: 0.5;">-</td>`;
-                }
-            }
-            bodyHtml += '</tr>';
+        // source A-Z then name
+        sorted.sort((a, b) => {
+            const sa = a.sourceName || 'ZZZ';
+            const sb = b.sourceName || 'ZZZ';
+            if (sa < sb) return -1;
+            if (sa > sb) return 1;
+            return (a.description || a.name || '').localeCompare(b.description || b.name || '');
         });
-
-        bodyHtml += `<tr class="matrix-footer"><td>Total do Mês</td>`;
-        for (let i = 0; i < 6; i++) {
-            bodyHtml += `<td>${formatCurrency(colTotals[i])}</td>`;
-        }
-        bodyHtml += `</tr>`;
     }
 
-    if(tbody) tbody.innerHTML = bodyHtml;
-    // Drag events are for mouse-only; touch scroll handled natively via CSS
-    if(typeof rebindDragEvents === 'function') rebindDragEvents();
+    if (sorted.length === 0) {
+        listEl.innerHTML = '<li class="empty-state" style="padding:1.5rem; text-align:center; color:var(--text-muted);">Nenhuma fatura encontrada.</li>';
+        return;
+    }
+
+    listEl.innerHTML = '';
+    sorted.forEach(item => {
+        const name = item.description || item.name || '—';
+        const source = item.sourceName || (item.type === 'installments' ? 'Sem fonte' : 'Despesas Fixas');
+        const isInst = item.type === 'installments';
+        const val = Number(item.installmentAmount || item.amount || 0);
+        const typeLabel = isInst ? `${item.remainingInstallments}x parcela` : 'Assinatura';
+
+        // Find source color
+        let dotColor = '#8a94a6';
+        if (item.sourceId) {
+            const src = cacheSources.find(s => s.id === item.sourceId);
+            if (src && src.color) dotColor = src.color;
+        }
+
+        const li = document.createElement('li');
+        li.className = 'expense-item';
+        li.style.cursor = 'pointer';
+        li.innerHTML = `
+            <div class="expense-item-left">
+                <span class="source-color-dot" style="background:${dotColor};"></span>
+                <div class="expense-item-info">
+                    <span class="expense-item-name">${name}</span>
+                    <span class="expense-item-meta">${source} · ${typeLabel}</span>
+                </div>
+            </div>
+            <span class="expense-item-amount" style="color:var(--danger-color);">${formatCurrency(val)}</span>
+        `;
+        li.addEventListener('click', () => openItemActionModal(item));
+        listEl.appendChild(li);
+    });
 }
 
-// Handlers globais para editar/excluir itens da Matriz de Faturas
+window.sortMatrix = function(key) {
+    _matrixSortKey = key;
+    document.querySelectorAll('.sort-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.sort === key);
+    });
+    renderMatrixList(window._currentMatrixItems || []);
+};
+
+// Meses Seguintes: opens a bottom sheet with the full 12-month table
+window.openMonthsModal = function() {
+    const items = window._currentMatrixItems || [];
+    const now = new Date();
+    const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const numMonths = 12;
+
+    // Build header
+    let headHtml = '<tr><th>Despesa / Fonte</th>';
+    for (let i = 0; i < numMonths; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        headHtml += `<th>${monthNames[d.getMonth()]} ${d.getFullYear()}</th>`;
+    }
+    headHtml += '</tr>';
+
+    // Build rows
+    const colTotals = Array(numMonths).fill(0);
+    let bodyHtml = '';
+    const sorted = [...items].sort((a, b) => {
+        const sa = a.sourceName || 'ZZZ';
+        const sb = b.sourceName || 'ZZZ';
+        return sa.localeCompare(sb) || (a.description || a.name || '').localeCompare(b.description || b.name || '');
+    });
+
+    sorted.forEach(item => {
+        const name = item.description || item.name || '—';
+        const source = item.sourceName || 'Despesas Fixas';
+        const isInst = item.type === 'installments';
+        const val = Number(item.installmentAmount || item.amount || 0);
+
+        bodyHtml += `<tr><td><strong>${name}</strong><br><small class="text-muted">${source}</small></td>`;
+        for (let i = 0; i < numMonths; i++) {
+            const active = isInst ? i < item.remainingInstallments : true;
+            if (active) {
+                bodyHtml += `<td>${formatCurrency(val)}</td>`;
+                colTotals[i] += val;
+            } else {
+                bodyHtml += `<td style="opacity:0.35; color:var(--text-muted);">—</td>`;
+            }
+        }
+        bodyHtml += '</tr>';
+    });
+
+    // Totals footer
+    bodyHtml += `<tr class="matrix-footer"><td>Total</td>`;
+    for (let i = 0; i < numMonths; i++) {
+        bodyHtml += `<td>${formatCurrency(colTotals[i])}</td>`;
+    }
+    bodyHtml += '</tr>';
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'modal-months-overlay';
+    overlay.innerHTML = `
+        <div class="modal-sheet" style="max-height:88vh;">
+            <div class="modal-sheet-header">
+                <h3>📅 Próximos 12 Meses</h3>
+                <button class="modal-sheet-close" onclick="document.getElementById('modal-months-overlay').remove()">×</button>
+            </div>
+            <div class="months-modal-scroll">
+                <table class="months-modal-table">
+                    <thead>${headHtml}</thead>
+                    <tbody>${bodyHtml}</tbody>
+                </table>
+            </div>
+        </div>
+    `;
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+};
+
+// Item Action Modal – opens when clicking a row in the installments list
+function openItemActionModal(item) {
+    const name = item.description || item.name || '—';
+    const isInst = item.type === 'installments';
+    const val = Number(item.installmentAmount || item.amount || 0);
+    const itemType = item.type; // 'installments' or 'fixedExpenses'
+
+    // Remove previous modal if any
+    document.getElementById('modal-item-action-overlay')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'modal-item-action-overlay';
+    overlay.innerHTML = `
+        <div class="modal-sheet">
+            <div class="modal-sheet-header">
+                <h3>${name}</h3>
+                <button class="modal-sheet-close" onclick="document.getElementById('modal-item-action-overlay').remove()">×</button>
+            </div>
+            <div class="item-action-field">
+                <label>Nome</label>
+                <input type="text" id="iaf-name" value="${name}">
+            </div>
+            <div class="item-action-field">
+                <label>Valor ${isInst ? '(por parcela)' : ''}</label>
+                <input type="number" id="iaf-amount" value="${val.toFixed(2)}" step="0.01">
+            </div>
+            ${isInst ? `<div class="item-action-field">
+                <label>Parcelas restantes</label>
+                <input type="number" id="iaf-remaining" value="${item.remainingInstallments || 1}" min="0">
+            </div>` : ''}
+            <div class="item-action-actions">
+                <button class="btn-save" id="iaf-save-btn">Salvar</button>
+                <button class="btn-delete" id="iaf-delete-btn">Excluir</button>
+            </div>
+        </div>
+    `;
+
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.body.appendChild(overlay);
+
+    // Save handler
+    document.getElementById('iaf-save-btn').addEventListener('click', async () => {
+        const newName = document.getElementById('iaf-name').value.trim();
+        const newAmount = parseFloat(document.getElementById('iaf-amount').value);
+        if (!newName || isNaN(newAmount) || newAmount <= 0) {
+            showToast('Preencha nome e valor válidos.', 'warning');
+            return;
+        }
+        const updates = isInst
+            ? { description: newName, installmentAmount: newAmount, remainingInstallments: parseInt(document.getElementById('iaf-remaining').value) || 1 }
+            : { name: newName, amount: newAmount };
+        try {
+            await updateExpense(currentUserId, item.id, itemType, updates);
+            showToast('Atualizado com sucesso!', 'success');
+            overlay.remove();
+            await loadInstallmentsScreen();
+            await loadDashboardData();
+        } catch (err) {
+            console.error(err);
+            showToast('Erro ao salvar. Tente novamente.', 'error');
+        }
+    });
+
+    // Delete handler
+    document.getElementById('iaf-delete-btn').addEventListener('click', async () => {
+        if (!confirm(`Excluir "${name}"? Esta ação é irreversível.`)) return;
+        try {
+            await deleteExpense(currentUserId, item.id, itemType);
+            showToast(`"${name}" excluído.`, 'success');
+            overlay.remove();
+            await loadInstallmentsScreen();
+            await loadDashboardData();
+        } catch (err) {
+            console.error(err);
+            showToast('Erro ao excluir. Tente novamente.', 'error');
+        }
+    });
+}
+
+// Handlers globais legados (mantidos por compatibilidade)
 window._editMatrixItem = function(id, type) {
     const cacheToSearch = type === 'installments' ? cacheInstallments : cacheFixed;
     const found = cacheToSearch.find(item => item.id === id);
-    if (found) {
-        openEditModal({ ...found, type });
-    } else {
-        showToast('Item não encontrado no cache. Recarregue a tela.', 'error');
-    }
+    if (found) openItemActionModal({ ...found, type });
+    else showToast('Item não encontrado. Recarregue a tela.', 'error');
 };
 
-window._deleteMatrixItem = async function(id, type) {
-    const cacheToSearch = type === 'installments' ? cacheInstallments : cacheFixed;
-    const found = cacheToSearch.find(item => item.id === id);
-    const name = found ? (found.description || found.name || 'este item') : 'este item';
-
-    const confirmed = window.confirm(`Excluir "${name}"? Esta ação é irreversível.`);
-    if (!confirmed) return;
-
-    try {
-        await deleteExpense(currentUserId, id, type);
-        showToast(`"${name}" excluído com sucesso.`, 'success');
-        await loadInstallmentsScreen();
-        await loadDashboardData();
-    } catch(err) {
-        console.error('Erro ao excluir item:', err);
-        showToast('Erro ao excluir. Tente novamente.', 'error');
-    }
-};
 
 // ==========================================
 // 7. RELATÓRIOS E GRÁFICOS (FASE 3)

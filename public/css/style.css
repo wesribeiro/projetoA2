@@ -1017,3 +1017,307 @@ form {
 .nav-label {
     display: block;
 }
+
+/* =========================================
+   Sort Buttons (Installments Screen)
+   ========================================= */
+.sort-btn {
+    padding: 0.25rem 0.75rem;
+    border-radius: 20px;
+    border: 1.5px solid #dde3ec;
+    background: white;
+    font-size: 0.72rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.sort-btn:hover {
+    border-color: var(--primary-color);
+    color: var(--primary-dark);
+}
+
+.sort-btn.active {
+    background: var(--primary-color);
+    border-color: var(--primary-color);
+    color: white;
+}
+
+/* =========================================
+   Color Dot (Installment Row)
+   ========================================= */
+.source-color-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    margin-top: 3px;
+}
+
+/* =========================================
+   Meses Seguintes Modal + Item Action Modal
+   ========================================= */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10, 15, 30, 0.55);
+    z-index: 800;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+}
+
+.modal-sheet {
+    background: var(--card-bg);
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+    padding: 1.5rem 1rem 2rem;
+    width: 100%;
+    max-width: 480px;
+    max-height: 85vh;
+    overflow-y: auto;
+    animation: slideUp 0.3s ease;
+}
+
+.modal-sheet-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.modal-sheet-header h3 {
+    font-size: 1rem;
+    font-weight: 700;
+}
+
+.modal-sheet-close {
+    background: none;
+    border: none;
+    font-size: 1.5rem;
+    cursor: pointer;
+    color: var(--text-muted);
+    line-height: 1;
+}
+
+/* months modal table */
+.months-modal-table {
+    width: max-content;
+    min-width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+}
+
+.months-modal-table th,
+.months-modal-table td {
+    padding: 0.55rem 0.9rem;
+    white-space: nowrap;
+    text-align: left;
+    border-bottom: 1px solid #f0f4f8;
+}
+
+.months-modal-table th {
+    background: #f8fafc;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    position: sticky;
+    top: 0;
+}
+
+.months-modal-table tr:hover td {
+    background: #f8faff;
+}
+
+.months-modal-scroll {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* item action modal */
+.item-action-field {
+    margin-bottom: 1rem;
+}
+
+.item-action-field label {
+    display: block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin-bottom: 0.3rem;
+    text-transform: uppercase;
+}
+
+.item-action-field input,
+.item-action-field select {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    border-radius: var(--radius-sm);
+    border: 1.5px solid #dde3ec;
+    font-size: 0.9rem;
+    background: var(--bg-main);
+}
+
+.item-action-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.item-action-actions .btn-save {
+    flex: 1;
+    padding: 0.75rem;
+    background: var(--primary-color);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.item-action-actions .btn-delete {
+    padding: 0.75rem 1rem;
+    background: rgba(231, 76, 60, 0.08);
+    color: var(--danger-color);
+    border: 1.5px solid rgba(231, 76, 60, 0.2);
+    border-radius: var(--radius-sm);
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+@keyframes slideUp {
+    from {
+        transform: translateY(60px);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+/* =========================================
+   Responsive — Tablet (>= 768px)
+   ========================================= */
+@media (min-width: 768px) {
+    body {
+        background: var(--bg-main);
+    }
+
+    /* Expand screen to full width in tablet */
+    .screen {
+        max-width: 100%;
+        display: grid;
+        grid-template-columns: 240px 1fr;
+        grid-template-rows: auto 1fr;
+        min-height: 100vh;
+        overflow-x: visible;
+    }
+
+    /* Header spans full width */
+    .app-header {
+        grid-column: 1 / -1;
+        border-radius: 0;
+        padding: 1.2rem 2rem;
+    }
+
+    /* Bottom nav becomes sidebar */
+    .bottom-nav {
+        position: sticky;
+        top: 0;
+        height: auto;
+        min-height: calc(100vh - 80px);
+        flex-direction: column;
+        justify-content: flex-start;
+        padding: 2rem 1rem;
+        border-top: none;
+        border-right: 1px solid #e8ecf0;
+        box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
+        gap: 0.5rem;
+        align-items: stretch;
+    }
+
+    .bottom-nav li {
+        flex-direction: row;
+        justify-content: flex-start;
+        padding: 0.75rem 1rem;
+        border-radius: var(--radius-sm);
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .bottom-nav li:hover {
+        background: rgba(46, 204, 113, 0.08);
+    }
+
+    .bottom-nav li.active {
+        background: rgba(46, 204, 113, 0.12);
+    }
+
+    .bottom-nav li .ph {
+        font-size: 1.3rem;
+    }
+
+    .nav-label {
+        font-size: 0.88rem;
+        font-weight: 600;
+    }
+
+    /* Main content area */
+    .app-content {
+        padding: 1.5rem 2rem;
+        overflow-y: auto;
+        max-width: none;
+    }
+
+    /* Cards grid: 2 cols in tablet */
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+    }
+
+    /* FAB stays bottom right */
+    #btn-fab-main {
+        position: fixed;
+        bottom: 2rem;
+        right: 2rem;
+    }
+
+    /* Modal sheet takes 480px max-width centered */
+    .modal-sheet {
+        border-radius: var(--radius-lg);
+        max-height: 80vh;
+        margin-bottom: 5vh;
+    }
+}
+
+/* =========================================
+   Responsive — Desktop (>= 1280px)
+   ========================================= */
+@media (min-width: 1280px) {
+    .screen {
+        grid-template-columns: 260px 1fr;
+    }
+
+    .app-content {
+        padding: 2rem 3rem;
+        max-width: 900px;
+    }
+
+    .bottom-nav {
+        min-height: calc(100vh - 80px);
+        padding: 2rem 1.25rem;
+    }
+
+    /* Cards 3-col grid in desktop */
+    .dashboard-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}

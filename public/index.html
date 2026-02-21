@@ -120,16 +120,23 @@
                 </div>
             </section>
 
-            <!-- Card Despesas Fixas (Home) -->
-            <section class="card" style="margin-top: 1rem;">
-                <div class="card-header">
-                    <h3>Despesas Fixas & Assinaturas</h3>
-                    <h3 id="fixed-spent" class="text-danger">R$ 0,00</h3>
+            <!-- Card Despesas (accordion) -->
+            <section class="card" style="margin-top: 1rem;" id="card-despesas">
+                <div class="card-header" onclick="toggleDespesasAccordion()" style="cursor:pointer;">
+                    <div style="display:flex; flex-direction:column; gap:2px;">
+                        <h3 style="margin:0;">Despesas</h3>
+                        <span id="despesas-subtitle" style="font-size:0.75rem; color:var(--text-muted);">Clique para detalhar</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:0.8rem;">
+                        <strong id="fixed-spent" class="text-danger">R$ 0,00</strong>
+                        <i class="ph ph-caret-down" id="despesas-chevron" style="font-size:1.1rem; color:var(--text-muted); transition:transform 0.3s;"></i>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <ul id="fixed-expense-list" class="expense-list">
-                        <li class="empty-state">Nenhuma despesa fixa listada.</li>
-                    </ul>
+                <div id="despesas-sources-wrap">
+                    <ul id="fixed-expense-list" class="expense-list" style="padding: 0 0.25rem;"></ul>
+                </div>
+                <div id="despesas-detail-wrap" class="hidden" style="border-top:1px solid #f0f4f8; padding-top:0.5rem;">
+                    <ul id="fixed-expense-detail" class="expense-list" style="padding: 0 0.25rem;"></ul>
                 </div>
             </section>
             <!-- Fim Dashboard Individual -->
@@ -207,22 +214,22 @@
                 <!-- Cartões dinâmicos entram aqui pelo JS -->
             </div>
 
-            <section class="card" style="margin-top: 1.5rem;">
-                <div class="card-header">
+            <!-- Sort controls -->
+            <div style="display:flex; gap:0.5rem; margin-bottom:0.8rem; flex-wrap:wrap;">
+                <span style="font-size:0.75rem; color:var(--text-muted); align-self:center;">Ordenar:</span>
+                <button class="sort-btn active" data-sort="source" onclick="sortMatrix('source')">Fonte A-Z</button>
+                <button class="sort-btn" data-sort="name" onclick="sortMatrix('name')">Nome A-Z</button>
+                <button class="sort-btn" data-sort="price" onclick="sortMatrix('price')">Maior valor</button>
+            </div>
+
+            <section class="card" style="margin-top: 0;">
+                <div class="card-header" style="margin-bottom:0.5rem;">
                     <h3 id="inst-table-title">Próximos Meses (Todas as Fontes)</h3>
+                    <button onclick="openMonthsModal()" class="btn-secondary" style="font-size:0.78rem; padding:0.3rem 0.8rem; display:flex; align-items:center; gap:4px;"><i class="ph ph-calendar"></i> Meses seguintes</button>
                 </div>
                 <div class="card-body" style="padding: 0;">
-                    <!-- Tabela Dinâmica Matriz -->
-                    <div class="table-responsive" id="table-responsive-matrix" style="overflow-x:auto; max-width:100%; -webkit-overflow-scrolling:touch;">
-                        <table class="installments-matrix" id="matrix-table">
-                            <thead id="matrix-head">
-                                <!-- Preenchido dinamicamente (Meses) -->
-                            </thead>
-                            <tbody id="matrix-body">
-                                <!-- Preenchido dinamicamente (Despesas) -->
-                            </tbody>
-                        </table>
-                    </div>
+                    <!-- Lista de despesas por cartão -->
+                    <ul id="matrix-list" class="expense-list" style="padding: 0 0.25rem;"></ul>
                 </div>
             </section>
         </main>
