@@ -115,6 +115,40 @@ export async function getArchivedMonths(userId) {
 }
 
 // ==========================================
+// FUNÇÕES DE CATEGORIAS
+// ==========================================
+export async function getCategories(userId) {
+    const collRef = collection(db, "users", userId, "categories");
+    const q = query(collRef, orderBy("name", "asc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+export async function addCategory(userId, name) {
+    const collRef = collection(db, "users", userId, "categories");
+    const docRef = await addDoc(collRef, { name, createdAt: serverTimestamp() });
+    return docRef.id;
+}
+
+export async function deleteCategory(userId, categoryId) {
+    const docRef = doc(db, "users", userId, "categories", categoryId);
+    await deleteDoc(docRef);
+}
+
+// ==========================================
+// FUNÇÕES DE FONTES / CARTÕES (CRUD Extra)
+// ==========================================
+export async function updateSource(userId, sourceId, data) {
+    const docRef = doc(db, "users", userId, "sources", sourceId);
+    await updateDoc(docRef, data);
+}
+
+export async function deleteSource(userId, sourceId) {
+    const docRef = doc(db, "users", userId, "sources", sourceId);
+    await deleteDoc(docRef);
+}
+
+// ==========================================
 // FUNÇÕES DE GOVERNANÇA E AUDITORIA (FASE 2)
 // ==========================================
 

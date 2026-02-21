@@ -87,6 +87,12 @@
                 <h3>Fixos &amp; Parcelas</h3>
                 <strong id="committed-total" class="text-danger" style="font-size: 1rem; font-weight: 700;">R$ 0,00</strong>
             </div>
+            
+            <!-- Total Geral de Despesas -->
+            <div class="committed-row" style="margin-top: 0.5rem; margin-bottom: 1rem;">
+                <h3>Total de Despesas</h3>
+                <strong id="total-despesas" class="text-danger" style="font-size: 1.1rem; font-weight: 800;">R$ 0,00</strong>
+            </div>
 
 
                 <section class="card" style="margin-bottom: 1rem;">
@@ -120,23 +126,14 @@
                 </div>
             </section>
 
-            <!-- Card Despesas (accordion) -->
+            <!-- Card Despesas (itens expansíveis) -->
             <section class="card" style="margin-top: 1rem;" id="card-despesas">
-                <div class="card-header" onclick="toggleDespesasAccordion()" style="cursor:pointer;">
-                    <div style="display:flex; flex-direction:column; gap:2px;">
-                        <h3 style="margin:0;">Despesas</h3>
-                        <span id="despesas-subtitle" style="font-size:0.75rem; color:var(--text-muted);">Clique para detalhar</span>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:0.8rem;">
-                        <strong id="fixed-spent" class="text-danger">R$ 0,00</strong>
-                        <i class="ph ph-caret-down" id="despesas-chevron" style="font-size:1.1rem; color:var(--text-muted); transition:transform 0.3s;"></i>
-                    </div>
+                <div class="card-header">
+                    <h3 style="margin:0;">Despesas</h3>
+                    <strong id="fixed-spent" class="text-danger">R$ 0,00</strong>
                 </div>
-                <div id="despesas-sources-wrap">
-                    <ul id="fixed-expense-list" class="expense-list" style="padding: 0 0.25rem;"></ul>
-                </div>
-                <div id="despesas-detail-wrap" class="hidden" style="border-top:1px solid #f0f4f8; padding-top:0.5rem;">
-                    <ul id="fixed-expense-detail" class="expense-list" style="padding: 0 0.25rem;"></ul>
+                <div class="card-body" style="padding: 0;">
+                    <ul id="fixed-expense-list" class="expense-list" style="padding: 0 0.5rem;"></ul>
                 </div>
             </section>
             <!-- Fim Dashboard Individual -->
@@ -215,11 +212,19 @@
             </div>
 
             <!-- Sort controls -->
-            <div style="display:flex; gap:0.5rem; margin-bottom:0.8rem; flex-wrap:wrap;">
-                <span style="font-size:0.75rem; color:var(--text-muted); align-self:center;">Ordenar:</span>
-                <button class="sort-btn active" data-sort="source" onclick="sortMatrix('source')">Fonte A-Z</button>
-                <button class="sort-btn" data-sort="name" onclick="sortMatrix('name')">Nome A-Z</button>
-                <button class="sort-btn" data-sort="price" onclick="sortMatrix('price')">Maior valor</button>
+            <div style="display:flex; flex-direction:column; gap:0.8rem; margin-bottom:1rem;">
+                <div style="display:flex; gap:0.5rem; flex-wrap:wrap;">
+                    <span style="font-size:0.75rem; color:var(--text-muted); align-self:center;">Ordenar:</span>
+                    <button class="sort-btn active" data-sort="source" onclick="sortMatrix('source')">Fonte A-Z <i class="ph ph-arrow-up list-sort-icon"></i></button>
+                    <button class="sort-btn" data-sort="name" onclick="sortMatrix('name')">Nome <i class="ph ph-arrow-up list-sort-icon" style="display:none;"></i></button>
+                    <button class="sort-btn" data-sort="price" onclick="sortMatrix('price')">Valor <i class="ph ph-arrow-down list-sort-icon" style="display:none;"></i></button>
+                    <button class="sort-btn" data-sort="installments" onclick="sortMatrix('installments')">Parcelas <i class="ph ph-arrow-up list-sort-icon" style="display:none;"></i></button>
+                </div>
+                
+                <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.85rem; color:var(--text-color); cursor:pointer;">
+                    <input type="checkbox" id="toggle-matrix-variables" checked style="accent-color: var(--primary-color);">
+                    Mostrar gastos variáveis na fonte
+                </label>
             </div>
 
             <section class="card" style="margin-top: 0;">
@@ -385,10 +390,75 @@
                 </div>
                 <div class="input-group">
                     <label>Cor do Cartão</label>
-                    <input type="color" id="source-color" value="#8A05BE" style="width: 100%; height: 40px; cursor: pointer;">
+                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; margin-bottom: 1rem;">
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#8A05BE; cursor:pointer; border:2px solid transparent;" data-color="#8A05BE"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#FF5A5F; cursor:pointer; border:2px solid transparent;" data-color="#FF5A5F"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#00A699; cursor:pointer; border:2px solid transparent;" data-color="#00A699"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#FC642D; cursor:pointer; border:2px solid transparent;" data-color="#FC642D"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#484848; cursor:pointer; border:2px solid transparent;" data-color="#484848"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#000000; cursor:pointer; border:2px solid transparent;" data-color="#000000"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#FFB400; cursor:pointer; border:2px solid transparent;" data-color="#FFB400"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#007AFF; cursor:pointer; border:2px solid transparent;" data-color="#007AFF"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#34C759; cursor:pointer; border:2px solid transparent;" data-color="#34C759"></div>
+                        <div class="color-swatch source-color-swatch-add" style="width:28px; height:28px; border-radius:50%; background:#5856D6; cursor:pointer; border:2px solid transparent;" data-color="#5856D6"></div>
+                    </div>
+                    <!-- Fallback color picker -->
+                    <input type="color" id="source-color" value="#8A05BE" style="width: 100%; height: 40px; cursor: pointer; border:none; padding:0; background:none;">
                 </div>
                 <button type="submit" class="btn-primary w-100">Criar Cartão</button>
             </form>
+        </div>
+    </div>
+
+    <div id="modal-edit-source" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Editar Cartão/Conta</h3>
+                <button class="close-modal" data-modal="modal-edit-source">&times;</button>
+            </div>
+            <form id="form-edit-source">
+                <input type="hidden" id="edit-source-id">
+                <div class="input-group">
+                    <label>Nome do Cartão</label>
+                    <input type="text" id="edit-source-name" required>
+                </div>
+                <div class="input-group">
+                    <label>Cor do Cartão</label>
+                    <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap; margin-bottom: 1rem;">
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#8A05BE; cursor:pointer; border:2px solid transparent;" data-color="#8A05BE"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#FF5A5F; cursor:pointer; border:2px solid transparent;" data-color="#FF5A5F"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#00A699; cursor:pointer; border:2px solid transparent;" data-color="#00A699"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#FC642D; cursor:pointer; border:2px solid transparent;" data-color="#FC642D"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#484848; cursor:pointer; border:2px solid transparent;" data-color="#484848"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#000000; cursor:pointer; border:2px solid transparent;" data-color="#000000"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#FFB400; cursor:pointer; border:2px solid transparent;" data-color="#FFB400"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#007AFF; cursor:pointer; border:2px solid transparent;" data-color="#007AFF"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#34C759; cursor:pointer; border:2px solid transparent;" data-color="#34C759"></div>
+                        <div class="color-swatch source-color-swatch-edit" style="width:28px; height:28px; border-radius:50%; background:#5856D6; cursor:pointer; border:2px solid transparent;" data-color="#5856D6"></div>
+                    </div>
+                    <input type="color" id="edit-source-color-input" value="#8A05BE" style="width: 100%; height: 40px; cursor: pointer; border:none; padding:0; background:none;">
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 1rem;">
+                    <button type="button" id="btn-delete-source" class="btn-secondary" style="flex: 1; border-color: var(--danger-color); color: var(--danger-color);">Excluir</button>
+                    <button type="submit" class="btn-primary" style="flex: 2;">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-manage-categories" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Gerenciar Categorias</h3>
+                <button class="close-modal" data-modal="modal-manage-categories">&times;</button>
+            </div>
+            <form id="form-add-category" style="display:flex; gap:10px; margin-bottom: 1.5rem;">
+                <input type="text" id="new-category-name" placeholder="Nova Categoria..." required style="flex:1; padding:0.6rem; border-radius:var(--radius-sm); border:1px solid #ccc;">
+                <button type="submit" class="btn-primary" style="padding:0.6rem 1rem;">Criar</button>
+            </form>
+            <ul id="categories-list" class="expense-list" style="margin-top: 0.5rem; max-height: 250px; overflow-y:auto; padding-right:0.5rem;">
+                <li class="empty-state">Carregando...</li>
+            </ul>
         </div>
     </div>
 
@@ -419,7 +489,10 @@
                     <input type="number" id="expense-amount" step="0.01" required>
                 </div>
                 <div class="input-group">
-                    <label>Categoria</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label>Categoria</label>
+                        <a href="#" class="text-main link-manage-categories" style="font-size: 0.75rem; font-weight:600; text-decoration:none;">+ Nova</a>
+                    </div>
                     <select id="expense-category">
                         <option value="Lazer">Lazer</option>
                         <option value="Mercado">Mercado</option>
@@ -557,7 +630,10 @@
                 </div>
 
                 <div class="input-group" id="edit-category-group">
-                    <label>Categoria</label>
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                        <label>Categoria</label>
+                        <a href="#" class="text-main link-manage-categories" style="font-size: 0.75rem; font-weight:600; text-decoration:none;">+ Nova</a>
+                    </div>
                     <select id="edit-category">
                         <option value="Lazer">Lazer</option>
                         <option value="Mercado">Mercado</option>

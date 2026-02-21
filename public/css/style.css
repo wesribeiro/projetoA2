@@ -1208,31 +1208,27 @@ form {
 @media (min-width: 768px) {
     body {
         background: var(--bg-main);
+        align-items: flex-start;
     }
 
     /* Expand screen to full width in tablet */
     .screen {
         max-width: 100%;
+        width: 100%;
         display: grid;
         grid-template-columns: 240px 1fr;
         grid-template-rows: auto 1fr;
         min-height: 100vh;
-        overflow-x: visible;
+        overflow-x: hidden;
     }
 
-    /* Header spans full width */
-    .app-header {
-        grid-column: 1 / -1;
-        border-radius: 0;
-        padding: 1.2rem 2rem;
-    }
-
-    /* Bottom nav becomes sidebar */
+    /* Bottom nav becomes sidebar on the left */
     .bottom-nav {
+        grid-column: 1 / 2;
+        grid-row: 1 / 3;
         position: sticky;
         top: 0;
-        height: auto;
-        min-height: calc(100vh - 80px);
+        height: 100vh;
         flex-direction: column;
         justify-content: flex-start;
         padding: 2rem 1rem;
@@ -1252,14 +1248,6 @@ form {
         min-width: 0;
     }
 
-    .bottom-nav li:hover {
-        background: rgba(46, 204, 113, 0.08);
-    }
-
-    .bottom-nav li.active {
-        background: rgba(46, 204, 113, 0.12);
-    }
-
     .bottom-nav li .ph {
         font-size: 1.3rem;
     }
@@ -1269,8 +1257,18 @@ form {
         font-weight: 600;
     }
 
-    /* Main content area */
+    /* Header spans the top row of the right column */
+    .app-header {
+        grid-column: 2 / 3;
+        grid-row: 1 / 2;
+        border-radius: 0;
+        padding: 1.5rem 2rem;
+    }
+
+    /* Main content area in the bottom row of the right column */
     .app-content {
+        grid-column: 2 / 3;
+        grid-row: 2 / 3;
         padding: 1.5rem 2rem;
         overflow-y: auto;
         max-width: none;

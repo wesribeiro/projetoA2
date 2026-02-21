@@ -5,7 +5,8 @@ import {
     addInstallment, getInstallments,
     addVariableExpense, getVariableExpenses,
     getUserProfile, getPartnerVariableExpenses, getPartnerMonthSummary, addAuditLog, getWeekNumber,
-    addSource, getSources,
+    addSource, getSources, updateSource, deleteSource,
+    getCategories, addCategory, deleteCategory,
     getPartnerAllVariableExpenses, getPartnerFixedExpenses, getPartnerInstallments,
     deleteExpense, updateExpense, getPartnerAuditLogs, getArchivedMonths
 } from './firebase-services.js?v=1.1';
@@ -17,6 +18,7 @@ let currentProfile = null;
 let cacheSources = [];
 let cacheInstallments = [];
 let cacheFixed = [];
+let cacheCategories = [];
 
 // Gráficos (Para destruição ao recarregar aba)
 let budgetChartInstance = null;
@@ -64,6 +66,7 @@ window.addEventListener('user-logged-in', async (e) => {
         btnHome.click();
     } else {
         await loadSources();
+        await loadCategories();
         await loadDashboardData();
     }
 });
@@ -91,9 +94,80 @@ async function loadSources() {
         sourceVar.innerHTML = html;
         sourceInst.innerHTML = html;
         if(sourceSub) sourceSub.innerHTML = html;
+
+        // Recuperar última fonte utilizada
+        const lastSource = localStorage.getItem('A2_last_source');
+        if (lastSource) {
+            if (sourceVar.querySelector(`option[value="${lastSource}"]`)) sourceVar.value = lastSource;
+        }
     } catch(err) {
         console.error("Erro ao carregar fontes: ", err);
     }
+}
+
+// ==========================================
+// CARREGAMENTO DE CATEGORIAS
+// ==========================================
+async function loadCategories() {
+    if(!currentUserId) return;
+    try {
+        const customCategories = await getCategories(currentUserId);
+        const expenseCategory = document.getElementById('expense-category');
+        const editCategory = document.getElementById('edit-category');
+        
+        cacheCategories = ["Lazer", "Mercado", "Transporte", "Outros", ...customCategories];
+        
+        let html = '';
+        cacheCategories.forEach(c => {
+            const name = typeof c === 'string' ? c : c.name;
+            html += `<option value="${name}">${name}</option>`;
+        });
+        
+        if (expenseCategory) expenseCategory.innerHTML = html;
+        if (editCategory) editCategory.innerHTML = html;
+        
+        renderCategoriesManageList(customCategories);
+    } catch(err) {
+        console.error("Erro ao carregar categorias: ", err);
+    }
+}
+
+function renderCategoriesManageList(categories) {
+    const list = document.getElementById('categories-list');
+    if (!list) return;
+    list.innerHTML = '';
+    if (categories.length === 0) {
+        list.innerHTML = '<li class="empty-state">Nenhuma categoria personalizada.</li>';
+        return;
+    }
+    categories.forEach(c => {
+        const li = document.createElement('li');
+        li.style.display = 'flex';
+        li.style.justifyContent = 'space-between';
+        li.style.alignItems = 'center';
+        li.style.padding = '0.5rem 0';
+        li.style.borderBottom = '1px solid #eee';
+        li.innerHTML = `
+            <span>${c.name}</span>
+            <button type="button" class="btn-secondary btn-delete-cat" data-id="${c.id}" style="padding: 4px 8px; font-size: 0.8rem; border-color: var(--danger-color); color: var(--danger-color);">Excluir</button>
+        `;
+        list.appendChild(li);
+    });
+    
+    document.querySelectorAll('.btn-delete-cat').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const id = e.target.getAttribute('data-id');
+            if (confirm('Tem certeza que deseja excluir esta categoria?')) {
+                try {
+                    await deleteCategory(currentUserId, id);
+                    showToast('Categoria excluída!');
+                    await loadCategories(); // recarrega
+                } catch(err) {
+                    showToast('Erro ao excluir: ' + err.message, 'error');
+                }
+            }
+        });
+    });
 }
 
 // ==========================================
@@ -188,10 +262,24 @@ async function loadDashboardData() {
             if (income === 0) {
                 balanceHint.textContent = '⚠️ Configure sua renda para ativar os gráficos';
             } else {
-                const daysInMonth = new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).getDate();
-                const today = new Date().getDate();
-                const daysLeft = daysInMonth - today;
-                balanceHint.textContent = `${daysLeft} dias restantes no mês`;
+                const today = new Date();
+                today.setHours(0,0,0,0);
+                
+                let limitDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+                let businessDays = 0;
+                while (businessDays < 5) {
+                    const dayOfWeek = limitDate.getDay();
+                    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                        businessDays++;
+                    }
+                    if (businessDays < 5) {
+                        limitDate.setDate(limitDate.getDate() + 1);
+                    }
+                }
+                limitDate.setHours(0,0,0,0);
+                const diffTime = limitDate - today;
+                const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                balanceHint.textContent = `Pagamento em ${daysLeft} dias`;
             }
         }
 
@@ -200,17 +288,21 @@ async function loadDashboardData() {
         document.getElementById('start-savings').value = monthData.savingsGoal || 0;
         document.getElementById('start-project').value = monthData.projectContribution || 0;
 
-        // 2. Busca Despesas Fixas e Parcelas
+        // 2. Busca Todos os Gastos
         const fixos = await getFixedExpenses(currentUserId);
         const parcelas = await getInstallments(currentUserId);
+        const variaveis = await getVariableExpenses(currentUserId);
 
         let totalCommitted = 0;
-        const fixedListContainer = document.getElementById('fixed-expense-list');
+        let totalVariableMonth = 0;
+        let totalVariableWeek = 0;
+        
+        const now = new Date();
+        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
+        const currentWeekNumber = Math.ceil((now.getDate() + firstDay) / 7);
 
-        // Agrupar fixos + parcelas por fonte (source) para exibição no dashboard
+        // Agrupar fixos, parcelas e variáveis por fonte para exibição no dashboard
         const sourceMap = {};
-        const allDespesaItems = []; // lista detalhada para o accordion
-
         const currentMonthName = new Date().toLocaleString('pt-BR', { month: 'long' });
 
         fixos.forEach(f => {
@@ -219,9 +311,9 @@ async function loadDashboardData() {
             const key = f.sourceId || '__despesas_fixas__';
             const label = f.sourceName || 'Despesas Fixas';
             const meta = f.sourceId ? 'Parcelas e assinaturas' : `Despesas de ${currentMonthName}`;
-            if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0 };
+            if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0, items: [] };
             sourceMap[key].total += amount;
-            allDespesaItems.push({ label: f.name, meta: `${label} · ${f.isSubscription ? 'Assinatura' : 'Fixo'}`, amount, type: 'fixedExpenses', id: f.id });
+            sourceMap[key].items.push({ name: f.name, amount });
         });
 
         parcelas.forEach(p => {
@@ -230,73 +322,10 @@ async function loadDashboardData() {
             const key = p.sourceId || '__despesas_fixas__';
             const label = p.sourceName || 'Despesas Fixas';
             const meta = p.sourceId ? 'Parcelas e assinaturas' : `Despesas de ${currentMonthName}`;
-            if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0 };
+            if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0, items: [] };
             sourceMap[key].total += amount;
-            allDespesaItems.push({ label: p.description || p.name, meta: `${label} · ${p.remainingInstallments}x`, amount, type: 'installments', id: p.id });
+            sourceMap[key].items.push({ name: p.description || p.name, amount });
         });
-
-        if (fixedListContainer) {
-            fixedListContainer.innerHTML = '';
-            const sourceEntries = Object.values(sourceMap);
-            if (sourceEntries.length === 0) {
-                fixedListContainer.innerHTML = '<li class="empty-state text-muted" style="padding:1rem;">Nenhuma despesa fixa ou parcela cadastrada.</li>';
-            } else {
-                sourceEntries
-                    .sort((a, b) => b.total - a.total)
-                    .forEach(({ label, meta, total }) => {
-                        const li = document.createElement('li');
-                        li.className = 'expense-item';
-                        li.innerHTML = `
-                            <div class="expense-item-left">
-                                <div class="expense-category-dot" style="background: var(--primary-dark)"></div>
-                                <div class="expense-item-info">
-                                    <span class="expense-item-name">${label}</span>
-                                    <span class="expense-item-meta">${meta}</span>
-                                </div>
-                            </div>
-                            <span class="expense-item-amount" style="color: var(--danger-color)">${formatCurrency(total)}</span>
-                        `;
-                        fixedListContainer.appendChild(li);
-                    });
-            }
-        }
-
-        // Preenche a lista expandida (accordion detail)
-        const detailList = document.getElementById('fixed-expense-detail');
-        if (detailList) {
-            detailList.innerHTML = '';
-            if (allDespesaItems.length === 0) {
-                detailList.innerHTML = '<li class="empty-state text-muted" style="padding:1rem;">Nenhum item.</li>';
-            } else {
-                allDespesaItems.forEach(item => {
-                    const li = document.createElement('li');
-                    li.className = 'expense-item';
-                    li.innerHTML = `
-                        <div class="expense-item-left">
-                            <div class="expense-category-dot" style="background: var(--secondary-color)"></div>
-                            <div class="expense-item-info">
-                                <span class="expense-item-name">${item.label}</span>
-                                <span class="expense-item-meta">${item.meta}</span>
-                            </div>
-                        </div>
-                        <span class="expense-item-amount" style="color: var(--danger-color)">${formatCurrency(item.amount)}</span>
-                    `;
-                    detailList.appendChild(li);
-                });
-            }
-        }
-
-        const fixedSpentEl = document.getElementById('fixed-spent');
-        if(fixedSpentEl) fixedSpentEl.textContent = formatCurrency(totalCommitted);
-        // 3. Busca Gastos Variáveis
-        const variaveis = await getVariableExpenses(currentUserId);
-        let totalVariableMonth = 0;
-        let totalVariableWeek = 0;
-        
-        // Descobre semana atual grossa (para o MVP, lógica simplificada no firebase-services)
-        const now = new Date();
-        const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
-        const currentWeekNumber = Math.ceil((now.getDate() + firstDay) / 7);
 
         const listContainer = document.getElementById('variable-expense-list');
         listContainer.innerHTML = '';
@@ -305,7 +334,17 @@ async function loadDashboardData() {
             const amount = Number(v.amount);
             totalVariableMonth += amount;
             
-            // Soma gastos da semana e adiciona na lista UI
+            // Variável também entra no agrupamento de fontes se tiver fonte
+            if (v.sourceId) {
+                const key = v.sourceId;
+                const label = v.sourceName;
+                const meta = 'Parcelas e assinaturas';
+                if (!sourceMap[key]) sourceMap[key] = { label, meta, total: 0, items: [] };
+                sourceMap[key].total += amount;
+                sourceMap[key].items.push({ name: `${v.description} (Variável)`, amount });
+            }
+            
+            // Soma gastos da semana e adiciona na lista UI (Card da Semana)
             if (v.weekNumber === currentWeekNumber) {
                 totalVariableWeek += amount;
                 
@@ -325,6 +364,54 @@ async function loadDashboardData() {
         if (listContainer.children.length === 0) {
             listContainer.innerHTML = '<li class="empty-state text-muted">Nenhum gasto esta semana.</li>';
         }
+
+        const fixedListContainer = document.getElementById('fixed-expense-list');
+        if (fixedListContainer) {
+            fixedListContainer.innerHTML = '';
+            const sourceEntries = Object.values(sourceMap);
+            if (sourceEntries.length === 0) {
+                fixedListContainer.innerHTML = '<li class="empty-state text-muted" style="padding:1rem;">Nenhuma despesa fixa ou parcela cadastrada.</li>';
+            } else {
+                sourceEntries
+                    .sort((a, b) => b.total - a.total)
+                    .forEach(({ label, meta, total, items }, idx) => {
+                        const li = document.createElement('li');
+                        li.className = 'expense-item';
+                        li.style.flexDirection = 'column';
+                        li.style.alignItems = 'stretch';
+                        
+                        let itemsHtml = items.map(it => `
+                            <div style="display:flex; justify-content:space-between; padding: 0.4rem 0; border-bottom: 1px dashed #eee;">
+                                <span style="font-size:0.85rem; color:var(--text-muted);">${it.name}</span>
+                                <span style="font-size:0.85rem; color:var(--danger-color);">${formatCurrency(it.amount)}</span>
+                            </div>
+                        `).join('');
+
+                        li.innerHTML = `
+                            <div class="expense-item-header" onclick="this.nextElementSibling.classList.toggle('hidden'); const icon = this.querySelector('.ph-caret-down'); if(icon.style.transform==='rotate(180deg)') icon.style.transform='rotate(0deg)'; else icon.style.transform='rotate(180deg)';" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; width:100%;">
+                                <div class="expense-item-left" style="display:flex; gap:0.8rem; align-items:center;">
+                                    <div class="expense-category-dot" style="background: var(--primary-dark)"></div>
+                                    <div class="expense-item-info">
+                                        <span class="expense-item-name">${label}</span>
+                                        <span class="expense-item-meta">${meta}</span>
+                                    </div>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:0.5rem;">
+                                    <span class="expense-item-amount" style="color: var(--danger-color)">${formatCurrency(total)}</span>
+                                    <i class="ph ph-caret-down text-muted" style="transition:transform 0.3s;"></i>
+                                </div>
+                            </div>
+                            <div class="expense-item-details hidden" style="margin-top:0.8rem; padding-left:1.5rem;">
+                                ${itemsHtml}
+                            </div>
+                        `;
+                        fixedListContainer.appendChild(li);
+                    });
+            }
+        }
+
+        const fixedSpentEl = document.getElementById('fixed-spent');
+        if(fixedSpentEl) fixedSpentEl.textContent = formatCurrency(totalCommitted);
 
         // 4. Cálculos Financeiros Core do Sistema
         // Note: income already declared above for balance-hint
@@ -346,6 +433,10 @@ async function loadDashboardData() {
         }
 
         // 5. Atualização de Interface
+        const totalDespesas = totalCommitted + totalVariableMonth + savings + project;
+        const totalDespesasEl = document.getElementById('total-despesas');
+        if (totalDespesasEl) totalDespesasEl.textContent = formatCurrency(totalDespesas);
+
         document.getElementById('total-income').textContent = formatCurrency(income);
         document.getElementById('savings-goal').textContent = formatCurrency(savings);
         document.getElementById('project-contribution').textContent = formatCurrency(project);
@@ -496,6 +587,9 @@ formExpense.addEventListener('submit', async (e) => {
     try {
         const sel = document.getElementById('expense-source');
         const sourceName = sel.options[sel.selectedIndex].text;
+        
+        // Salva a preferência de fonte
+        localStorage.setItem('A2_last_source', sel.value);
 
         await addVariableExpense(currentUserId, {
             description: document.getElementById('expense-desc').value,
@@ -1149,6 +1243,13 @@ async function loadInstallmentsScreen() {
         cacheInstallments = await getInstallments(currentUserId);
         cacheFixed = await getFixedExpenses(currentUserId);
         
+        const monthData = await getActiveMonthData(currentUserId);
+        if(monthData) {
+            window.cacheVariables = await getVariableExpenses(currentUserId, monthData.id);
+        } else {
+            window.cacheVariables = [];
+        }
+        
         renderSourcesCarousel();
         
         // Simula click no cartão 'Visão Geral' por padrão
@@ -1171,6 +1272,7 @@ function renderSourcesCarousel() {
         </div>
     `;
 
+    const includeVars = document.getElementById('toggle-matrix-variables')?.checked;
     cacheSources.forEach(source => {
         // Calcula quanto esse cartão acumula neste mês
         let monthTotal = 0;
@@ -1180,10 +1282,16 @@ function renderSourcesCarousel() {
         cacheFixed.forEach(f => {
             if(f.sourceId === source.id) monthTotal += Number(f.amount);
         });
+        if(includeVars && window.cacheVariables) {
+            window.cacheVariables.forEach(v => {
+                if(v.sourceId === source.id) monthTotal += Number(v.amount);
+            });
+        }
 
         html += `
-            <div class="credit-card" style="background: linear-gradient(135deg, ${source.color}, #555);" onclick="selectSource('${source.id}')">
+            <div class="credit-card" style="background: linear-gradient(135deg, ${source.color}, #555); position:relative;" onclick="selectSource('${source.id}')">
                 <div class="card-name">${source.name}</div>
+                <button class="btn-edit-source" onclick="event.stopPropagation(); window.openEditSourceModal('${source.id}')" style="position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.3); border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:none; color:#fff; cursor:pointer; transition:background 0.2s;"><i class="ph ph-gear" style="font-size:1.1rem;"></i></button>
                 <div class="card-chip"></div>
                 <div class="card-balance">${formatCurrency(monthTotal)}</div>
                 <div class="card-footer">Fatura Prevista</div>
@@ -1197,9 +1305,12 @@ function renderSourcesCarousel() {
 
 // Current sort key for the installments list
 let _matrixSortKey = 'source';
+let _matrixSortDir = 'asc';
+window._currentSelectedSourceId = 'all';
 
 // O HTML usa onclick="selectSource(...)", por isso precisamos expor no window
 window.selectSource = function(sourceId) {
+    window._currentSelectedSourceId = sourceId;
     const titleEl = document.getElementById('inst-table-title');
 
     let sourceName = 'Todas as Fontes';
@@ -1227,6 +1338,15 @@ window.selectSource = function(sourceId) {
         allItems.push({ type: 'fixedExpenses', ...f });
     });
 
+    const includeVars = document.getElementById('toggle-matrix-variables')?.checked;
+    if (includeVars && window.cacheVariables) {
+        let varsToInclude = window.cacheVariables.filter(v => v.sourceId);
+        if (sourceId !== 'all') {
+            varsToInclude = varsToInclude.filter(v => v.sourceId === sourceId);
+        }
+        varsToInclude.forEach(v => allItems.push({ type: 'variableExpenses', ...v }));
+    }
+
     // Store globally for the months modal
     window._currentMatrixItems = allItems;
 
@@ -1239,18 +1359,26 @@ function renderMatrixList(items) {
 
     // Sort
     const sorted = [...items];
+    const sign = _matrixSortDir === 'asc' ? 1 : -1;
+    
     if (_matrixSortKey === 'name') {
-        sorted.sort((a, b) => (a.description || a.name || '').localeCompare(b.description || b.name || ''));
+        sorted.sort((a, b) => sign * (a.description || a.name || '').localeCompare(b.description || b.name || ''));
     } else if (_matrixSortKey === 'price') {
-        sorted.sort((a, b) => Number(b.installmentAmount || b.amount || 0) - Number(a.installmentAmount || a.amount || 0));
+        sorted.sort((a, b) => sign * (Number(a.installmentAmount || a.amount || 0) - Number(b.installmentAmount || b.amount || 0)));
+    } else if (_matrixSortKey === 'installments') {
+        sorted.sort((a, b) => {
+            const remA = a.type === 'installments' ? (a.remainingInstallments || 0) : 0;
+            const remB = b.type === 'installments' ? (b.remainingInstallments || 0) : 0;
+            return sign * (remA - remB);
+        });
     } else {
         // source A-Z then name
         sorted.sort((a, b) => {
             const sa = a.sourceName || 'ZZZ';
             const sb = b.sourceName || 'ZZZ';
-            if (sa < sb) return -1;
-            if (sa > sb) return 1;
-            return (a.description || a.name || '').localeCompare(b.description || b.name || '');
+            if (sa < sb) return sign * -1;
+            if (sa > sb) return sign * 1;
+            return sign * (a.description || a.name || '').localeCompare(b.description || b.name || '');
         });
     }
 
@@ -1264,8 +1392,10 @@ function renderMatrixList(items) {
         const name = item.description || item.name || '—';
         const source = item.sourceName || (item.type === 'installments' ? 'Sem fonte' : 'Despesas Fixas');
         const isInst = item.type === 'installments';
+        const isVar = item.type === 'variableExpenses';
         const val = Number(item.installmentAmount || item.amount || 0);
-        const typeLabel = isInst ? `${item.remainingInstallments}x parcela` : 'Assinatura';
+        let typeLabel = isVar ? 'Variável' : (isInst ? `${item.remainingInstallments}x parcela` : 'Assinatura');
+        if (item.type === 'fixedExpenses' && !item.isSubscription) typeLabel = 'Fixo';
 
         // Find source color
         let dotColor = '#8a94a6';
@@ -1293,9 +1423,25 @@ function renderMatrixList(items) {
 }
 
 window.sortMatrix = function(key) {
-    _matrixSortKey = key;
+    if (_matrixSortKey === key) {
+        _matrixSortDir = _matrixSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        _matrixSortKey = key;
+        _matrixSortDir = 'asc';
+    }
+    
     document.querySelectorAll('.sort-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.sort === key);
+        b.classList.remove('active');
+        const icon = b.querySelector('.list-sort-icon');
+        if(icon) icon.style.display = 'none';
+        
+        if(b.dataset.sort === key) {
+            b.classList.add('active');
+            if(icon) {
+                icon.style.display = 'inline-block';
+                icon.className = _matrixSortDir === 'asc' ? 'ph ph-arrow-up list-sort-icon' : 'ph ph-arrow-down list-sort-icon';
+            }
+        }
     });
     renderMatrixList(window._currentMatrixItems || []);
 };
@@ -1663,3 +1809,142 @@ function rebindDragEvents() {
         ele.style.cursor = 'grab';
     });
 }
+
+// Inicializar botões globais e cores (novo Modal Categorias, Edição Fonte)
+document.addEventListener('DOMContentLoaded', () => {
+    // Variable matrix toggle
+    const toggleVars = document.getElementById('toggle-matrix-variables');
+    if (toggleVars) {
+        // Load preference
+        const savedPref = localStorage.getItem('A2_include_variables');
+        if (savedPref !== null) {
+            toggleVars.checked = savedPref === 'true';
+        }
+        
+        toggleVars.addEventListener('change', () => {
+            localStorage.setItem('A2_include_variables', toggleVars.checked);
+            renderSourcesCarousel();
+            if(window._currentSelectedSourceId) {
+                window.selectSource(window._currentSelectedSourceId);
+            }
+        });
+    }
+
+    // Cores Add
+    const colorSwatchesAdd = document.querySelectorAll('.source-color-swatch-add');
+    const sourceColorInput = document.getElementById('source-color');
+    colorSwatchesAdd.forEach(swatch => {
+        swatch.addEventListener('click', (e) => {
+            const color = e.target.getAttribute('data-color');
+            if(sourceColorInput) sourceColorInput.value = color;
+            // Destaca a seleção visualmente
+            colorSwatchesAdd.forEach(s => s.style.border = '2px solid transparent');
+            e.target.style.border = '2px solid var(--text-color)';
+        });
+    });
+
+    // Cores Edit
+    const colorSwatchesEdit = document.querySelectorAll('.source-color-swatch-edit');
+    const editSourceColorInput = document.getElementById('edit-source-color-input');
+    colorSwatchesEdit.forEach(swatch => {
+        swatch.addEventListener('click', (e) => {
+            const color = e.target.getAttribute('data-color');
+            if(editSourceColorInput) editSourceColorInput.value = color;
+            colorSwatchesEdit.forEach(s => s.style.border = '2px solid transparent');
+            e.target.style.border = '2px solid var(--text-color)';
+        });
+    });
+
+    // Links de Gerenciar Categoria
+    document.querySelectorAll('.link-manage-categories').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            document.getElementById('modal-manage-categories').classList.remove('hidden');
+        });
+    });
+    
+    // Add Categoria form
+    const formAddCategory = document.getElementById('form-add-category');
+    if (formAddCategory) {
+        formAddCategory.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = formAddCategory.querySelector('button');
+            const input = document.getElementById('new-category-name');
+            const name = input.value.trim();
+            if(!name) return;
+            
+            btn.disabled = true;
+            try {
+                await addCategory(currentUserId, name);
+                input.value = '';
+                showToast('Categoria adicionada!');
+                await loadCategories();
+            } catch(err) {
+                showToast('Erro ao criar: ' + err.message, 'error');
+            } finally { btn.disabled = false; }
+        });
+    }
+
+    // Modal Edit Source open func
+    window.openEditSourceModal = function(sourceId) {
+        const source = cacheSources.find(s => s.id === sourceId);
+        if(!source) return;
+        document.getElementById('edit-source-id').value = source.id;
+        document.getElementById('edit-source-name').value = source.name;
+        document.getElementById('edit-source-color-input').value = source.color;
+        
+        // Destacar swatch respectivo
+        colorSwatchesEdit.forEach(s => {
+            if(s.getAttribute('data-color') === source.color) {
+                s.style.border = '2px solid var(--text-color)';
+            } else {
+                s.style.border = '2px solid transparent';
+            }
+        });
+        
+        document.getElementById('modal-edit-source').classList.remove('hidden');
+    };
+
+    // Form Edit Source
+    const formEditSource = document.getElementById('form-edit-source');
+    if (formEditSource) {
+        formEditSource.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = formEditSource.querySelector('button[type="submit"]');
+            btn.disabled = true;
+            try {
+                const id = document.getElementById('edit-source-id').value;
+                const name = document.getElementById('edit-source-name').value;
+                const color = document.getElementById('edit-source-color-input').value;
+                await updateSource(currentUserId, id, { name, color });
+                document.getElementById('modal-edit-source').classList.add('hidden');
+                showToast('Cartão atualizado com sucesso!');
+                await loadSources();
+                await loadInstallmentsScreen(); // recarrega a tela de cartões
+            } catch(err) {
+                showToast('Erro: ' + err.message, 'error');
+            } finally { btn.disabled = false; }
+        });
+    }
+
+    // Delete Source
+    const btnDeleteSource = document.getElementById('btn-delete-source');
+    if(btnDeleteSource) {
+        btnDeleteSource.addEventListener('click', async () => {
+            const id = document.getElementById('edit-source-id').value;
+            if(!confirm('Tem certeza que deseja excluir ESTE CARTÃO?')) return;
+            
+            // Checar se não existem despesas vinculadas e avisar? (No MVP só deletamos)
+            btnDeleteSource.disabled = true;
+            try {
+                await deleteSource(currentUserId, id);
+                document.getElementById('modal-edit-source').classList.add('hidden');
+                showToast('Cartão removido!');
+                await loadSources();
+                await loadInstallmentsScreen();
+            } catch(err) {
+                showToast('Erro: ' + err.message, 'error');
+            } finally { btnDeleteSource.disabled = false; }
+        });
+    }
+});
