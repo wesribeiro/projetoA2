@@ -7,9 +7,10 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Função para verificar se o usuário é Admin (via custom claim)
+    // Função para verificar se o usuário é Admin
     function isAdmin() {
-      return isAuthenticated() && request.auth.token.role == "admin";
+      // Simplificado para desenvolvimento: Admin fixo por email
+      return isAuthenticated() && request.auth.token.email == "admin@casamento.com";
     }
 
     // Função para verificar se a requisição é do dono do recurso
@@ -39,26 +40,18 @@ service cloud.firestore {
         allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
         
         // Escrita no mês apenas se for o dono, e o mês não estiver fechado (closed == true)
-        // Permite a criação do mês se não existir ainda.
-        allow create: if isOwner(userId);
-        allow update: if isOwner(userId) && (!resource.data.keys().hasAll(['closed']) || resource.data.closed == false);
+        // Permite a criação do mês se não existir ainda. Admin bypass.
+        allow create: if isOwner(userId) || isAdmin();
+        allow update: if (isOwner(userId) && (!resource.data.keys().hasAll(['closed']) || resource.data.closed == false)) || isAdmin();
         allow delete: if isAdmin(); // Meses não podem ser deletados pelo usuário final
 
         // Regras das sub-coleções financeiras e auditorias dentro do escopo do mês
         
-        match /fixedExpenses/{docId} {
-          allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
-          allow write: if isOwner(userId) && get(/databases/$(database)/documents/users/$(userId)/months/$(monthId)).data.closed != true;
-        }
-
-        match /installments/{docId} {
-          allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
-          allow write: if isOwner(userId) && get(/databases/$(database)/documents/users/$(userId)/months/$(monthId)).data.closed != true;
-        }
-
+        // Regras das sub-coleções financeiras e auditorias dentro do escopo do mês
+        
         match /variableExpenses/{docId} {
           allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
-          allow write: if isOwner(userId) && get(/databases/$(database)/documents/users/$(userId)/months/$(monthId)).data.closed != true;
+          allow write: if isOwner(userId) || isAdmin();
         }
 
         match /auditLogs/{docId} {
@@ -72,6 +65,17 @@ service cloud.firestore {
 
       // Regras de Fontes Financeiras (Criado na Fase 3)
       match /sources/{docId} {
+        allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
+      }
+
+      // Regras Globais para Despesas Fixas e Parcelas (Fase 6)
+      match /fixedExpenses/{docId} {
+        allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
+      }
+
+      match /installments/{docId} {
         allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
         allow write: if isOwner(userId) || isAdmin();
       }

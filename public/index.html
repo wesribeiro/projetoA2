@@ -11,8 +11,8 @@
 </head>
 <body>
 
-    <!-- Container de Login -->
-    <div id="login-screen" class="screen active">
+    <!-- Container de Login (Oculto por padrão para o onAuthState decidir) -->
+    <div id="login-screen" class="screen hidden">
         <div class="login-box">
             <h1>Projeto A2</h1>
             <p>Governança Financeira</p>
@@ -33,11 +33,25 @@
 
     <!-- Dashboard Principal -->
     <div id="app-screen" class="screen hidden">
-        <header class="app-header">
-            <div>
-                <h2 id="header-title">Olá, <span id="user-name-display">Usuário</span></h2>
-                <p id="current-month-display">Mês de ...</p>
-                <button id="btn-settings" class="btn-secondary" style="margin-top: 8px; font-size: 0.8rem; border-color: white; color: white;">Configurar Mês</button>
+        <header class="app-header" style="display: flex; justify-content: space-between; align-items: flex-start;">
+            <div style="flex: 1;">
+                <h2 id="header-title" style="margin-bottom: 5px;">Olá, <span id="user-name-display">Usuário</span></h2>
+                
+                <!-- Extras Exclusivos da Primeira Aba -->
+                <div id="dashboard-header-extras">
+                    <p id="current-month-display" style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">Mês Inativo</p>
+                    <div style="margin-top: 8px; display: flex; gap: 10px;">
+                        <button id="btn-start-month" class="btn-secondary" style="font-size: 0.8rem; border-color: white; color: white;">Iniciar Mês</button>
+                        <button id="btn-close-month" class="btn-secondary" style="font-size: 0.8rem; border-color: #ff6b6b; color: #ff6b6b; display: none;">Encerrar Mês</button>
+                    </div>
+                    <!-- Painel Admin: Visível apenas para o super usuário -->
+                    <div id="admin-panel" class="hidden" style="margin-top: 10px; background: rgba(0,0,0,0.2); padding: 5px; border-radius: 8px;">
+                        <label style="font-size: 0.8rem; margin-right: 5px; color: white;">Acesso Admin:</label>
+                        <div id="admin-buttons-container" style="display: flex; gap: 8px; margin-top: 5px;">
+                            <span style="color: white; font-size: 0.8rem;">Carregando usuários...</span>
+                        </div>
+                    </div>
+                </div>
             </div>
             <button id="btn-logout" class="btn-text">Sair</button>
         </header>
@@ -73,10 +87,9 @@
                     <strong id="committed-total" class="text-danger" style="font-size: 1.1rem;">R$ 0,00</strong>
                 </div>
 
-                <!-- Gráficos no Dash (Movidos da aba Relatório) -->
                 <section class="card" style="margin-bottom: 1rem;">
                     <div class="card-header">
-                        <h3 style="font-size: 1rem;">Gastos vs Orçamento</h3>
+                        <h3 style="font-size: 1rem;">Despesas vs Orçamento</h3>
                     </div>
                     <div class="card-body">
                         <canvas id="budgetChart" height="200"></canvas>
@@ -104,20 +117,73 @@
                     </ul>
                 </div>
             </section>
+
+            <!-- Card Despesas Fixas (Home) -->
+            <section class="card" style="margin-top: 1rem;">
+                <div class="card-header">
+                    <h3>Despesas Fixas & Assinaturas</h3>
+                    <h3 id="fixed-spent" class="text-danger">R$ 0,00</h3>
+                </div>
+                <div class="card-body">
+                    <ul id="fixed-expense-list" class="expense-list">
+                        <li class="empty-state">Nenhuma despesa fixa listada.</li>
+                    </ul>
+                </div>
+            </section>
             <!-- Fim Dashboard Individual -->
         </main>
 
         <!-- Tela de Auditoria -->
         <main class="app-content hidden" id="audit-screen-content">
+            <!-- Visão Consolidada do Parceiro -->
+            <section class="card" style="margin-bottom: 1.5rem; cursor: pointer;" id="card-audit-partner-summary" title="Clique para detalhes completos">
+                <div class="card-header">
+                    <h3 id="audit-partner-title">Resumo do Parceiro(a)</h3>
+                    <i class="ph ph-caret-right text-muted"></i>
+                </div>
+                <div class="card-body">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span class="text-muted">Renda Declarada</span>
+                        <strong id="audit-partner-income">R$ 0,00</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span class="text-muted">Comprometido (Fixo/Parcela)</span>
+                        <strong id="audit-partner-fixed" class="text-danger">R$ 0,00</strong>
+                    </div>
+                     <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                        <span class="text-muted">Gastos (Variáveis do Mês)</span>
+                        <strong id="audit-partner-variable" class="text-danger">R$ 0,00</strong>
+                    </div>
+                    <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid #f0f0f0;">
+                         <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <span class="text-muted">Saldo Livre (Sobra)</span>
+                            <strong id="audit-partner-available" class="text-main" style="font-size: 1.2rem;">R$ 0,00</strong>
+                         </div>
+                    </div>
+                </div>
+            </section>
+
             <section class="card">
                 <div class="card-header">
-                    <h3>Auditoria da Semana</h3>
+                    <h3>Atividades e Auditoria</h3>
                     <strong class="text-main" id="audit-partner-name">Parceiro(a)</strong>
                 </div>
                 <div class="card-body">
                     <p class="text-muted" style="margin-bottom:1rem;">Revise os gastos variáveis desta semana.</p>
                     <ul id="audit-expense-list" class="expense-list">
                         <li class="empty-state">Nenhum gasto para auditar.</li>
+                    </ul>
+                </div>
+            </section>
+
+            <!-- Histórico de Meses / Relatórios -->
+            <section class="card" style="margin-top: 1.5rem;">
+                <div class="card-header">
+                    <h3>Relatórios Arquivados</h3>
+                </div>
+                <div class="card-body">
+                    <ul id="archived-reports-list" class="expense-list">
+                        <li class="empty-state">Carregando...</li>
                     </ul>
                 </div>
             </section>
@@ -248,26 +314,51 @@
         </nav>
     </div>
 
-    <div id="modal-settings" class="modal hidden">
+    <div id="modal-start-month" class="modal hidden">
         <div class="modal-content">
             <div class="modal-header">
-                <h3>Configurar Mês</h3>
-                <button class="close-modal" data-modal="modal-settings">&times;</button>
+                <h3>Planejar Novo Mês</h3>
+                <button class="close-modal" data-modal="modal-start-month">&times;</button>
             </div>
-            <form id="form-settings">
+            <form id="form-start-month">
                 <div class="input-group">
-                    <label>Renda Mensal (R$)</label>
-                    <input type="number" id="setting-income" step="0.01" required>
+                    <label>Renda Estimada (R$)</label>
+                    <input type="number" id="start-income" step="0.01" required>
                 </div>
                 <div class="input-group">
                     <label>Meta de Poupança (R$)</label>
-                    <input type="number" id="setting-savings" step="0.01" required>
+                    <input type="number" id="start-savings" step="0.01" required>
                 </div>
                 <div class="input-group">
-                    <label>Proj. Casamento (R$)</label>
-                    <input type="number" id="setting-project" step="0.01" required>
+                    <label>Meta p/ Projeto Casamento (R$)</label>
+                    <input type="number" id="start-project" step="0.01" required>
                 </div>
-                <button type="submit" class="btn-primary w-100">Salvar Configurações</button>
+                <button type="submit" class="btn-primary w-100">Iniciar Novo Mês</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="modal-close-month" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Encerrar Mês Atual</h3>
+                <button class="close-modal" data-modal="modal-close-month">&times;</button>
+            </div>
+            <p class="text-muted" style="margin-bottom: 1rem; font-size: 0.9rem;">Informe os valores consolidados. O que realmente sobrou e foi guardado?</p>
+            <form id="form-close-month">
+                <div class="input-group">
+                    <label>Renda REAL Recebida (R$)</label>
+                    <input type="number" id="close-income" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Poupança REAL Guardada (R$)</label>
+                    <input type="number" id="close-savings" step="0.01" required>
+                </div>
+                <div class="input-group">
+                    <label>Projeto Casamento REAL (R$)</label>
+                    <input type="number" id="close-project" step="0.01" required>
+                </div>
+                <button type="submit" class="btn-primary w-100" style="background-color: var(--danger-color); color: white; border: none;">Finalizar Mês e Avaliar</button>
             </form>
         </div>
     </div>
@@ -424,6 +515,132 @@
                 </div>
                 <button type="submit" class="btn-primary w-100">Registrar Parcela</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Modal Universal de Detalhes / Edição / Exclusão -->
+    <div id="modal-edit-expense" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Detalhes da Despesa</h3>
+                <button class="close-modal" data-modal="modal-edit-expense">&times;</button>
+            </div>
+            <form id="form-edit-expense">
+                <input type="hidden" id="edit-id">
+                <input type="hidden" id="edit-type"> <!-- 'variable', 'fixed', 'installment', 'subscription' -->
+                
+                <div class="input-group">
+                    <label>Título / Descrição</label>
+                    <input type="text" id="edit-name" required>
+                </div>
+                
+                <div class="input-group">
+                    <label>Valor (R$)</label>
+                    <input type="number" id="edit-amount" step="0.01" required>
+                </div>
+                
+                <!-- Campos dinâmicos extras (Parcelas, Fontes, Data) mostrados via JS conforme o Tipo -->
+                <div class="input-group" id="edit-source-group">
+                    <label>Fonte / Cartão</label>
+                    <select id="edit-source">
+                         <option value="" disabled>Carregando...</option>
+                    </select>
+                </div>
+
+                <div class="input-group" id="edit-category-group">
+                    <label>Categoria</label>
+                    <select id="edit-category">
+                        <option value="Lazer">Lazer</option>
+                        <option value="Mercado">Mercado</option>
+                        <option value="Transporte">Transporte</option>
+                        <option value="Outros">Outros</option>
+                    </select>
+                </div>
+
+                <div class="input-group" id="edit-installments-group" style="display:none;">
+                    <label>Parcelas Restantes</label>
+                    <input type="number" id="edit-remaining" min="1">
+                </div>
+                
+                <div style="display: flex; gap: 10px; margin-top: 1rem;">
+                    <button type="button" id="btn-delete-expense" class="btn-secondary" style="flex: 1; border-color: var(--danger-color); color: var(--danger-color);">Excluir</button>
+                    <button type="submit" class="btn-primary" style="flex: 2;">Salvar Alterações</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Modal Visão Detalhada do Parceiro -->
+    <div id="modal-partner-details" class="modal hidden">
+        <div class="modal-content" style="max-height: 80vh; overflow-y: auto;">
+            <div class="modal-header">
+                <h3>Detalhes do Parceiro(a)</h3>
+                <button class="close-modal" data-modal="modal-partner-details">&times;</button>
+            </div>
+            
+            <h4 style="margin-top: 1rem; color: var(--text-color);">Despesas Fixas e Assinaturas</h4>
+            <ul id="partner-fixed-list" class="expense-list" style="margin-top: 0.5rem;">
+                <li class="empty-state">Carregando...</li>
+            </ul>
+
+            <h4 style="margin-top: 1.5rem; color: var(--text-color);">Parcelas Ativas</h4>
+            <ul id="partner-installments-list" class="expense-list" style="margin-top: 0.5rem;">
+                <li class="empty-state">Carregando...</li>
+            </ul>
+
+            <h4 style="margin-top: 1.5rem; color: var(--text-color);">Relação Completa Variáveis</h4>
+            <ul id="partner-variables-list" class="expense-list" style="margin-top: 0.5rem;">
+                <li class="empty-state">Carregando...</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Modal Relatório Arquivado -->
+    <div id="modal-archived-report" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Relatório Concluído</h3>
+                <button class="close-modal" data-modal="modal-archived-report">&times;</button>
+            </div>
+            
+            <p class="text-muted" style="margin-bottom: 1rem; text-align:center;">
+                Comparativo entre o Planejado no início do ciclo e a materialidade da Renda efetivada no Fechamento.
+            </p>
+
+            <div class="summary-details">
+                <div class="detail-item">
+                    <span>Renda Prevista</span>
+                    <strong id="rep-est-income" class="text-muted">R$ 0,00</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Renda REAL</span>
+                    <strong id="rep-act-income" class="text-main" style="font-size:1.1rem;">R$ 0,00</strong>
+                </div>
+            </div>
+
+            <div class="summary-details" style="margin-top:1rem;">
+                <div class="detail-item">
+                    <span>Reserva Prevista</span>
+                    <strong id="rep-est-savings" class="text-muted">R$ 0,00</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Reserva REAL</span>
+                    <strong id="rep-act-savings" class="text-main" style="font-size:1.1rem;">R$ 0,00</strong>
+                </div>
+            </div>
+
+            <div class="summary-details" style="margin-top:1rem; border-bottom:none;">
+                <div class="detail-item">
+                    <span>Projeto Previsto</span>
+                    <strong id="rep-est-project" class="text-muted">R$ 0,00</strong>
+                </div>
+                <div class="detail-item">
+                    <span>Projeto REAL</span>
+                    <strong id="rep-act-project" class="text-main" style="font-size:1.1rem;">R$ 0,00</strong>
+                </div>
+            </div>
+
+            <button type="button" class="btn-secondary w-100 close-modal" data-modal="modal-archived-report" style="margin-top: 1.5rem;">Fechar</button>
         </div>
     </div>
 

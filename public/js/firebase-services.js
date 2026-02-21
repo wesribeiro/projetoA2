@@ -1,32 +1,117 @@
 import { db } from './firebase-config.js';
-import { doc, getDoc, setDoc, collection, addDoc, getDocs, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, addDoc, getDocs, query, orderBy, serverTimestamp, where, limit } from "https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore.js";
 
-// Função utilitária para obter a string 'YYYY-MM' do mês atual
-export function getCurrentMonthString() {
-    const now = new Date();
-    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-}
-
-// Verifica se existe o mês, senao cria baseado no mês anterior (ou zerado).
-export async function getOrCreateCurrentMonth(userId) {
-    const yyyyMm = getCurrentMonthString();
-    const monthRef = doc(db, "users", userId, "months", yyyyMm);
-    const monthSnap = await getDoc(monthRef);
-
-    if (!monthSnap.exists()) {
-        // Se não existir, tenta criar com valores básicos (ou copiando do mês anterior no futuro)
-        const initialData = {
-            income: 0,
-            savingsGoal: 0,
-            projectContribution: 0,
-            closed: false,
-            createdAt: serverTimestamp()
-        };
-        await setDoc(monthRef, initialData);
-        return initialData;
+// Obtem o ID do mês ativo do usuário (Cria um novo se não houver)
+export async function getActiveMonthId(userId) {
+    const collRef = collection(db, "users", userId, "months");
+    const q = query(collRef, where("status", "==", "active"), limit(1));
+    const qs = await getDocs(q);
+    if (!qs.empty) {
+        return qs.docs[0].id;
     }
     
-    return monthSnap.data();
+    // Se não tem mês ativo, AUTO CRIA UM DE IMEDIATO (Background)
+    const newMonthData = {
+        status: "active",
+        createdAt: serverTimestamp(),
+        income: 0,
+        savingsGoal: 0,
+        projectContribution: 0,
+        actualIncome: 0,
+        actualSavings: 0,
+        actualProject: 0,
+        closed: false
+    };
+    const docRef = await addDoc(collRef, newMonthData);
+    return docRef.id;
+}
+
+// Obtem os dados do mês ativo
+export async function getActiveMonthData(userId) {
+    const activeId = await getActiveMonthId(userId);
+    if (!activeId) return null;
+    const monthRef = doc(db, "users", userId, "months", activeId);
+    const monthSnap = await getDoc(monthRef);
+    return monthSnap.exists() ? monthSnap.data() : null;
+}
+
+// Inicia ou Edita as Metas do mês ativo
+export async function startMonth(userId, data) {
+    const activeId = await getActiveMonthId(userId);
+    
+    if (activeId) {
+        // Se já existe mês, apenas edita as metas
+        const monthRef = doc(db, "users", userId, "months", activeId);
+        await setDoc(monthRef, {
+            ...data,
+            closed: false
+        }, { merge: true });
+    } else {
+        // Fallback: cria um novo
+        const collRef = collection(db, "users", userId, "months");
+        await addDoc(collRef, {
+            ...data,
+            status: "active",
+            createdAt: serverTimestamp(),
+            closed: false
+        });
+    }
+}
+
+// Encerra o mês ativo
+export async function closeMonth(userId, data, partnerId) {
+    const activeId = await getActiveMonthId(userId);
+    if (!activeId) throw new Error("Sem mês ativo para encerrar");
+    const monthRef = doc(db, "users", userId, "months", activeId);
+    await setDoc(monthRef, {
+        ...data,
+        status: "archived",
+        closedAt: serverTimestamp()
+    }, { merge: true });
+
+    // Diminuir parcelas ativas (decremento global)
+    const instRef = collection(db, "users", userId, "installments");
+    const instQs = await getDocs(instRef);
+    const batch = [];
+    instQs.forEach(docSnap => {
+        const docData = docSnap.data();
+        if(docData.remainingInstallments > 0) {
+            batch.push(updateDoc(doc(db, "users", userId, "installments", docSnap.id), {
+                remainingInstallments: docData.remainingInstallments - 1
+            }));
+        }
+    });
+    if(batch.length > 0) await Promise.all(batch);
+
+    // Enviar alerta para auditoria do parceiro
+    if(partnerId) {
+        const pActiveId = await getActiveMonthId(partnerId);
+        if(pActiveId) {
+             const auditRef = collection(db, "users", partnerId, "months", pActiveId, "auditLogs");
+             await addDoc(auditRef, {
+                 weekNumber: 99, // Flag especial para mensagens de relatório Mês
+                 notes: `Mês Fechado! Guardado: R$ ${data.actualSavings} | Casamento: R$ ${data.actualProject} | Renda T.: R$ ${data.actualIncome}`,
+                 type: 'month_closure',
+                 createdAt: serverTimestamp()
+             });
+        }
+    }
+}
+
+// Obtem todos os meses arquivados (Estimado vs Realizado)
+export async function getArchivedMonths(userId) {
+    const collRef = collection(db, "users", userId, "months");
+    const snapshot = await getDocs(collRef);
+    let archived = [];
+    snapshot.forEach(doc => {
+        const data = doc.data();
+        if(data.status === 'archived') {
+            archived.push({ id: doc.id, ...data });
+        }
+    });
+    // Ordenar do mais recente para o mais antigo
+    archived.sort((a,b) => (b.closedAt?.seconds || 0) - (a.closedAt?.seconds || 0));
+    return archived;
 }
 
 // ==========================================
@@ -47,7 +132,8 @@ export async function getUserProfile(userId) {
 
 export async function getPartnerVariableExpenses(partnerId, targetWeek) {
     if (!partnerId) return [];
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(partnerId);
+    if (!yyyyMm) return [];
     const collRef = collection(db, "users", partnerId, "months", yyyyMm, "variableExpenses");
     // Aqui filtramos pelo targetWeek usando query
     // E evitamos retornar todos
@@ -61,14 +147,16 @@ export async function getPartnerVariableExpenses(partnerId, targetWeek) {
 
 export async function getPartnerMonthSummary(partnerId) {
     if (!partnerId) return null;
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(partnerId);
+    if(!yyyyMm) throw new Error("Sem mês ativo");
     const monthRef = doc(db, "users", partnerId, "months", yyyyMm);
     const monthSnap = await getDoc(monthRef);
     return monthSnap.exists() ? monthSnap.data() : null;
 }
 
 export async function addAuditLog(partnerId, notes) {
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(partnerId);
+    if (!yyyyMm) throw new Error("Parceiro sem mês ativo.");
     const collRef = collection(db, "users", partnerId, "months", yyyyMm, "auditLogs");
     await addDoc(collRef, {
         weekNumber: getWeekNumber(), // Auditoria é sempre sobre a semana atual (ou você pode passar parametro)
@@ -77,46 +165,61 @@ export async function addAuditLog(partnerId, notes) {
     });
 }
 
+export async function getPartnerAuditLogs(partnerId) {
+    const yyyyMm = await getActiveMonthId(partnerId);
+    if (!yyyyMm) return [];
+    const collRef = collection(db, "users", partnerId, "months", yyyyMm, "auditLogs");
+    const q = query(collRef, orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
 // Atualizar Renda e Metas do Mês
 export async function updateMonthGoals(userId, data) {
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(userId);
+    if(!yyyyMm) throw new Error("Sem mês ativo");
     const monthRef = doc(db, "users", userId, "months", yyyyMm);
     await setDoc(monthRef, data, { merge: true });
 }
 
-// Adicionar Despesa Fixa
+// Adicionar Despesa Fixa (Escopo Global)
 export async function addFixedExpense(userId, data) {
-    const yyyyMm = getCurrentMonthString();
-    const collRef = collection(db, "users", userId, "months", yyyyMm, "fixedExpenses");
+    const collRef = collection(db, "users", userId, "fixedExpenses");
     await addDoc(collRef, {
         ...data,
         createdAt: serverTimestamp()
     });
 }
 
-// Obter Despesas Fixas
+// Obter Despesas Fixas (Escopo Global)
 export async function getFixedExpenses(userId) {
-    const yyyyMm = getCurrentMonthString();
-    const collRef = collection(db, "users", userId, "months", yyyyMm, "fixedExpenses");
+    const collRef = collection(db, "users", userId, "fixedExpenses");
     const q = query(collRef, orderBy("dueDate", "asc"));
     const snapshot = await getDocs(q);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
-// Adicionar Parcela
+// Adicionar Parcela (Escopo Global)
 export async function addInstallment(userId, data) {
-    const yyyyMm = getCurrentMonthString();
-    const collRef = collection(db, "users", userId, "months", yyyyMm, "installments");
+    const collRef = collection(db, "users", userId, "installments");
     await addDoc(collRef, {
         ...data,
         createdAt: serverTimestamp()
     });
 }
 
-// Obter Parcelas
+// Obter Parcelas (Escopo Global)
 export async function getInstallments(userId) {
-    const yyyyMm = getCurrentMonthString();
-    const collRef = collection(db, "users", userId, "months", yyyyMm, "installments");
+    const collRef = collection(db, "users", userId, "installments");
+    const snapshot = await getDocs(collRef);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+// ==========================================
+// ADMIN: Listar todos os usuários
+// ==========================================
+export async function getAllUsersForAdmin() {
+    const collRef = collection(db, "users");
     const snapshot = await getDocs(collRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
@@ -130,7 +233,8 @@ export function getWeekNumber() {
 
 // Adicionar Gasto Variável
 export async function addVariableExpense(userId, data) {
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(userId);
+    if(!yyyyMm) throw new Error("Sem mês ativo");
     const collRef = collection(db, "users", userId, "months", yyyyMm, "variableExpenses");
     await addDoc(collRef, {
         ...data,
@@ -142,7 +246,8 @@ export async function addVariableExpense(userId, data) {
 
 // Obter Gastos Variáveis
 export async function getVariableExpenses(userId) {
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(userId);
+    if(!yyyyMm) throw new Error("Sem mês ativo");
     const collRef = collection(db, "users", userId, "months", yyyyMm, "variableExpenses");
     const q = query(collRef, orderBy("createdAt", "desc"));
     const snapshot = await getDocs(q);
@@ -174,22 +279,50 @@ export async function getSources(userId) {
 // ==========================================
 
 export async function getPartnerFixedExpenses(partnerId) {
-    const yyyyMm = getCurrentMonthString();
-    const collRef = collection(db, "users", partnerId, "months", yyyyMm, "fixedExpenses");
+    const collRef = collection(db, "users", partnerId, "fixedExpenses");
     const snapshot = await getDocs(collRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function getPartnerInstallments(partnerId) {
-    const yyyyMm = getCurrentMonthString();
-    const collRef = collection(db, "users", partnerId, "months", yyyyMm, "installments");
+    const collRef = collection(db, "users", partnerId, "installments");
     const snapshot = await getDocs(collRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
 }
 
 export async function getPartnerAllVariableExpenses(partnerId) {
-    const yyyyMm = getCurrentMonthString();
+    const yyyyMm = await getActiveMonthId(partnerId);
+    if (!yyyyMm) return [];
     const collRef = collection(db, "users", partnerId, "months", yyyyMm, "variableExpenses");
     const snapshot = await getDocs(collRef);
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+}
+
+// ==========================================
+// MÉTODOS DE MANIPULAÇÃO GENÉRICA (CRUD)
+// ==========================================
+
+export async function updateExpense(userId, expenseId, collectionName, newData) {
+    // Se a coleção for fixa ou parcela, manipulamos no root. Caso contrário, no mês.
+    let docRef;
+    if(collectionName === 'fixedExpenses' || collectionName === 'installments') {
+        docRef = doc(db, "users", userId, collectionName, expenseId);
+    } else {
+        const yyyyMm = await getActiveMonthId(userId);
+        if(!yyyyMm) throw new Error("Sem mês ativo");
+        docRef = doc(db, "users", userId, "months", yyyyMm, collectionName, expenseId);
+    }
+    await updateDoc(docRef, newData);
+}
+
+export async function deleteExpense(userId, expenseId, collectionName) {
+   let docRef;
+   if(collectionName === 'fixedExpenses' || collectionName === 'installments') {
+       docRef = doc(db, "users", userId, collectionName, expenseId);
+   } else {
+       const yyyyMm = await getActiveMonthId(userId);
+       if(!yyyyMm) throw new Error("Sem mês ativo");
+       docRef = doc(db, "users", userId, "months", yyyyMm, collectionName, expenseId);
+   }
+   await deleteDoc(docRef);
 }

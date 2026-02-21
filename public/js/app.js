@@ -1,13 +1,14 @@
 import { 
-    getOrCreateCurrentMonth, 
+    getActiveMonthData, startMonth, closeMonth, 
     updateMonthGoals,
     addFixedExpense, getFixedExpenses,
     addInstallment, getInstallments,
     addVariableExpense, getVariableExpenses,
     getUserProfile, getPartnerVariableExpenses, getPartnerMonthSummary, addAuditLog, getWeekNumber,
     addSource, getSources,
-    getPartnerAllVariableExpenses, getPartnerFixedExpenses, getPartnerInstallments
-} from './firebase-services.js';
+    getPartnerAllVariableExpenses, getPartnerFixedExpenses, getPartnerInstallments,
+    deleteExpense, updateExpense, getPartnerAuditLogs, getArchivedMonths
+} from './firebase-services.js?v=1.1';
 
 let currentUserId = null;
 let currentProfile = null;
@@ -50,8 +51,21 @@ window.addEventListener('user-logged-in', async (e) => {
     const now = new Date();
     document.getElementById('current-month-display').textContent = `Mês de ${monthNames[now.getMonth()]}`;
 
-    await loadSources();
-    await loadDashboardData();
+    // Reset de Estado Global (Garante troca limpa no modo Admin)
+    cacheSources = [];
+    cacheInstallments = [];
+    cacheFixed = [];
+    if(budgetChartInstance) budgetChartInstance.destroy();
+    if(categoryChartInstance) categoryChartInstance.destroy();
+
+    // Força navegação para Dashboard (clicando no botão invisivelmente)
+    const btnHome = document.querySelector('.nav-item[data-target="dashboard"]');
+    if(btnHome && !btnHome.classList.contains('active')) {
+        btnHome.click();
+    } else {
+        await loadSources();
+        await loadDashboardData();
+    }
 });
 
 // ==========================================
@@ -85,21 +99,124 @@ async function loadSources() {
 // ==========================================
 // 2. LÓGICA DO DASHBOARD
 // ==========================================
+function toggleSkeleton(show) {
+    const ids = ['available-balance', 'total-income', 'savings-goal', 'project-contribution', 'committed-total', 'week-spent'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            if (show) el.classList.add('skeleton');
+            else el.classList.remove('skeleton');
+        }
+    });
+}
+
+async function reloadCurrentScreenData() {
+    await loadDashboardData(); 
+    const activeNav = document.querySelector('.nav-item.active');
+    if(activeNav) {
+        const target = activeNav.getAttribute('data-target');
+        if(target === 'auditoria') await loadAuditData();
+        if(target === 'casal') await loadCoupleData();
+        if(target === 'parcelas') await loadInstallmentsScreen();
+        if(target === 'reports') await loadReportsScreen();
+    }
+}
+
 async function loadDashboardData() {
     if (!currentUserId) return;
+    
+    toggleSkeleton(true);
 
     try {
-        // 1. Garante que o mês existe e pega dados base
-        const monthData = await getOrCreateCurrentMonth(currentUserId);
+        // 1. Pega dados base do Mês Ativo
+        const monthData = await getActiveMonthData(currentUserId);
         
+        const btnStart = document.getElementById('btn-start-month');
+        const btnClose = document.getElementById('btn-close-month');
+        const displayMonth = document.getElementById('current-month-display');
+
+        if (!monthData) {
+            btnStart.style.display = 'block';
+            btnClose.style.display = 'none';
+            displayMonth.innerHTML = '<i class="ph ph-warning-circle text-danger"></i> Configure suas estimativas de salário.';
+            
+            document.getElementById('total-income').textContent = formatCurrency(0);
+            document.getElementById('savings-goal').textContent = formatCurrency(0);
+            document.getElementById('project-contribution').textContent = formatCurrency(0);
+            document.getElementById('committed-total').textContent = formatCurrency(0);
+            document.getElementById('week-spent').textContent = formatCurrency(0);
+            document.getElementById('available-balance').textContent = 'Inativo';
+            
+            document.getElementById('budget-progress').style.width = '0%';
+            document.getElementById('variable-expense-list').innerHTML = '<li class="empty-state">Inicie o mês para lançar gastos.</li>';
+            
+            renderBudgetChart(0, 0);
+            renderCategoryChart({});
+            toggleSkeleton(false);
+            return;
+        }
+
+        // Caso exista Mês em Andamento
+        btnStart.style.display = 'block';
+        btnStart.textContent = 'Editar Metas';
+        btnClose.style.display = 'block';
+        displayMonth.innerHTML = '<i class="ph ph-check-circle text-main"></i> Metas Configuradas';
+
+        // Preenche campos do modal de Configurações se já estiverem preenchidos no Cloud Firestore
+        document.getElementById('start-income').value = monthData.income || 0;
+        document.getElementById('start-savings').value = monthData.savingsGoal || 0;
+        document.getElementById('start-project').value = monthData.projectContribution || 0;
+
         // 2. Busca Despesas Fixas e Parcelas
         const fixos = await getFixedExpenses(currentUserId);
         const parcelas = await getInstallments(currentUserId);
         
         let totalCommitted = 0;
-        fixos.forEach(f => totalCommitted += Number(f.amount));
-        parcelas.forEach(p => totalCommitted += Number(p.amount || p.installmentAmount || 0)); // Adapto se o campo p for text/number
+        const fixedListContainer = document.getElementById('fixed-expense-list');
+        if(fixedListContainer) fixedListContainer.innerHTML = '';
         
+        fixos.forEach(f => {
+            const amount = Number(f.amount);
+            totalCommitted += amount;
+            
+            if(fixedListContainer) {
+                const li = document.createElement('li');
+                li.style.cursor = 'pointer';
+                li.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                        <span><strong>${f.name}</strong> <span class="text-muted">(${f.isSubscription ? 'Assinatura' : 'Fixo'}) ${f.sourceName ? ` - ${f.sourceName}` : ''}</span></span>
+                        <strong class="text-danger">${formatCurrency(amount)}</strong>
+                    </div>
+                `;
+                li.addEventListener('click', () => openEditModal({ ...f, type: 'fixedExpenses' }));
+                fixedListContainer.appendChild(li);
+            }
+        });
+        
+        parcelas.forEach(p => {
+            const amount = Number(p.amount || p.installmentAmount || 0);
+            totalCommitted += amount;
+
+            if(fixedListContainer) {
+                const li = document.createElement('li');
+                li.style.cursor = 'pointer';
+                li.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                        <span><strong>${p.name || p.description}</strong> <span class="text-muted">(Parcela ${p.remainingInstallments}x) ${p.sourceName ? ` - ${p.sourceName}` : ''}</span></span>
+                        <strong class="text-danger">${formatCurrency(amount)}</strong>
+                    </div>
+                `;
+                li.addEventListener('click', () => openEditModal({ ...p, type: 'installments' }));
+                fixedListContainer.appendChild(li);
+            }
+        });
+        
+        if (fixedListContainer && fixedListContainer.children.length === 0) {
+            fixedListContainer.innerHTML = '<li class="empty-state text-muted">Nenhuma despesa ou parcela no mês.</li>';
+        }
+        
+        const fixedSpentEl = document.getElementById('fixed-spent');
+        if(fixedSpentEl) fixedSpentEl.textContent = formatCurrency(totalCommitted);
         // 3. Busca Gastos Variáveis
         const variaveis = await getVariableExpenses(currentUserId);
         let totalVariableMonth = 0;
@@ -122,12 +239,14 @@ async function loadDashboardData() {
                 totalVariableWeek += amount;
                 
                 const li = document.createElement('li');
+                li.style.cursor = 'pointer';
                 li.innerHTML = `
                     <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
                         <span><strong>${v.description}</strong> <span class="text-muted">(${v.category})</span></span>
                         <strong class="text-danger">${formatCurrency(amount)}</strong>
                     </div>
                 `;
+                li.addEventListener('click', () => openEditModal({ ...v, type: 'variableExpenses' }));
                 listContainer.appendChild(li);
             }
         });
@@ -183,14 +302,12 @@ async function loadDashboardData() {
         } else {
             bar.style.backgroundColor = 'var(--danger-color)';
         }
-
-        // Preenche campos do modal de Configurações para facilitar próxima edição
-        document.getElementById('setting-income').value = income;
-        document.getElementById('setting-savings').value = savings;
-        document.getElementById('setting-project').value = project;
+        
+        // Metas: Poupança + Projeto
+        const goalsTotal = savings + project;
 
         // Renderiza Gráficos Nativamente no Dashboard
-        renderBudgetChart(totalVariableMonth, availableBalance > 0 ? availableBalance : 0);
+        renderBudgetChart(totalCommitted, totalVariableMonth, goalsTotal, availableBalance > 0 ? availableBalance : 0);
         
         const categoryMap = {};
         variaveis.forEach(v => {
@@ -203,6 +320,8 @@ async function loadDashboardData() {
 
     } catch (error) {
         console.error("Erro ao carregar dados:", error);
+    } finally {
+        toggleSkeleton(false);
     }
 }
 
@@ -214,9 +333,22 @@ function formatCurrency(value) {
 // 3. LÓGICA DE MODAIS E FAB (AÇÃO)
 // ==========================================
 
-// Configurações
-document.getElementById('btn-settings').addEventListener('click', () => {
-    document.getElementById('modal-settings').classList.remove('hidden');
+// Configurações (Mês)
+document.getElementById('btn-start-month').addEventListener('click', async () => {
+    try {
+        const monthData = await getActiveMonthData(currentUserId);
+        if (monthData) {
+            document.getElementById('start-income').value = monthData.income || '';
+            document.getElementById('start-savings').value = monthData.savingsGoal || '';
+            document.getElementById('start-project').value = monthData.projectContribution || '';
+        }
+    } catch(err) {
+        console.error("Erro ao pré-carregar metas:", err);
+    }
+    document.getElementById('modal-start-month').classList.remove('hidden');
+});
+document.getElementById('btn-close-month').addEventListener('click', () => {
+    document.getElementById('modal-close-month').classList.remove('hidden');
 });
 
 // Ação FAB (Flutuante)
@@ -282,7 +414,7 @@ formExpense.addEventListener('submit', async (e) => {
         });
         formExpense.reset();
         document.getElementById('modal-add-expense').classList.add('hidden');
-        await loadDashboardData();
+        await reloadCurrentScreenData();
     } catch(err) {
         console.error(err);
         alert("Erro ao registrar");
@@ -303,8 +435,7 @@ formSource.addEventListener('submit', async (e) => {
         });
         formSource.reset();
         document.getElementById('modal-add-source').classList.add('hidden');
-        await loadDashboardData(); 
-        await loadInstallmentsScreen();
+        await reloadCurrentScreenData();
     } catch(err) {
         console.error(err);
         alert("Erro ao criar Cartão: " + err.message);
@@ -328,10 +459,10 @@ if (formFixed) {
             });
             document.getElementById('modal-add-fixed').classList.add('hidden');
             formFixed.reset();
-            await loadDashboardData();
+            await reloadCurrentScreenData();
         } catch(err) {
             console.error(err);
-            alert("Erro ao registrar Fixa");
+            alert("Erro ao registrar Fixa: " + err.message);
         } finally { btn.disabled = false; }
     });
 }
@@ -359,10 +490,10 @@ if (formSub) {
             });
             document.getElementById('modal-add-subscription').classList.add('hidden');
             formSub.reset();
-            await loadDashboardData();
+            await reloadCurrentScreenData();
         } catch(err) {
             console.error(err);
-            alert("Erro ao registrar Assinatura");
+            alert("Erro ao registrar Assinatura: " + err.message);
         } finally { btn.disabled = false; }
     });
 }
@@ -388,33 +519,180 @@ formInstallment.addEventListener('submit', async (e) => {
         });
         formInstallment.reset();
         document.getElementById('modal-add-installment').classList.add('hidden');
-        await loadDashboardData();
+        await reloadCurrentScreenData();
     } catch(err) {
         console.error(err);
         alert("Erro ao registrar");
     } finally { btn.disabled = false; }
 });
 
-// Configuração de Mês
-const formSettings = document.getElementById('form-settings');
-formSettings.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = formSettings.querySelector('button');
-    btn.disabled = true;
+// Abertura de Mês
+const formStart = document.getElementById('form-start-month');
+if (formStart) {
+    formStart.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = formStart.querySelector('button');
+        btn.disabled = true;
 
+        try {
+            await startMonth(currentUserId, {
+                income: Number(document.getElementById('start-income').value),
+                savingsGoal: Number(document.getElementById('start-savings').value),
+                projectContribution: Number(document.getElementById('start-project').value)
+            });
+            document.getElementById('modal-start-month').classList.add('hidden');
+            formStart.reset();
+            await reloadCurrentScreenData();
+        } catch(err) {
+            console.error(err);
+            alert("Erro ao registrar Parcela: " + err.message);
+        } finally { btn.disabled = false; }
+    });
+}
+
+// Fechamento de Mês
+const formClose = document.getElementById('form-close-month');
+if(formClose) {
+    formClose.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = formClose.querySelector('button');
+        btn.disabled = true;
+
+        try {
+            await closeMonth(currentUserId, {
+                actualIncome: Number(document.getElementById('close-income').value),
+                actualSavings: Number(document.getElementById('close-savings').value),
+                actualProject: Number(document.getElementById('close-project').value)
+            }, currentProfile ? currentProfile.partnerId : null);
+            document.getElementById('modal-close-month').classList.add('hidden');
+            formClose.reset();
+            await loadDashboardData();
+            alert("Ciclo Mensal arquivado com sucesso. Você não tem mais um mês ativo, planeje o próximo!");
+        } catch(err) {
+            console.error(err);
+            alert("Erro ao fechar mês");
+        } finally { btn.disabled = false; }
+    });
+}
+
+// ==========================================
+// MÓDULO DE EDIÇÃO E EXCLUSÃO (CRUD)
+// ==========================================
+async function openEditModal(item) {
+    // Populando fontes atualizadas no Edit
+    const sourceEdit = document.getElementById('edit-source');
     try {
-        await updateMonthGoals(currentUserId, {
-            income: Number(document.getElementById('setting-income').value),
-            savingsGoal: Number(document.getElementById('setting-savings').value),
-            projectContribution: Number(document.getElementById('setting-project').value)
+        const sources = await getSources(currentUserId);
+        let html = '<option value="" disabled selected>Selecione...</option>';
+        sources.forEach(s => {
+            html += `<option value="${s.id}" ${item.sourceId === s.id ? 'selected' : ''}>${s.name}</option>`;
         });
-        document.getElementById('modal-settings').classList.add('hidden');
-        await loadDashboardData();
-    } catch(err) {
-        console.error(err);
-        alert("Erro ao salvar config");
-    } finally { btn.disabled = false; }
-});
+        sourceEdit.innerHTML = html;
+    } catch(e) { console.error(e); }
+
+    // Preenchendo campos base
+    document.getElementById('edit-id').value = item.id;
+    document.getElementById('edit-type').value = item.type; // fixedExpenses, installments, variableExpenses
+    
+    document.getElementById('edit-name').value = item.name || item.description || '';
+    document.getElementById('edit-amount').value = item.amount || item.installmentAmount || '';
+
+    // Lógica por tipo
+    const grpSource = document.getElementById('edit-source-group');
+    const grpCat = document.getElementById('edit-category-group');
+    const grpInst = document.getElementById('edit-installments-group');
+
+    grpSource.style.display = 'none';
+    grpCat.style.display = 'none';
+    grpInst.style.display = 'none';
+
+    if (item.type === 'variableExpenses') {
+        grpSource.style.display = 'block';
+        grpCat.style.display = 'block';
+        if(item.category) document.getElementById('edit-category').value = item.category;
+    } else if (item.type === 'fixedExpenses') {
+        if(item.isSubscription) grpSource.style.display = 'block';
+    } else if (item.type === 'installments') {
+        grpSource.style.display = 'block';
+        grpInst.style.display = 'block';
+        document.getElementById('edit-remaining').value = item.remainingInstallments || '';
+    }
+
+    document.getElementById('modal-edit-expense').classList.remove('hidden');
+}
+
+// Handle Update
+const formEdit = document.getElementById('form-edit-expense');
+if(formEdit) {
+    formEdit.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = formEdit.querySelector('button[type="submit"]');
+        btn.disabled = true;
+
+        try {
+            const id = document.getElementById('edit-id').value;
+            const type = document.getElementById('edit-type').value; // Collection Name
+            
+            const newData = {};
+            const valName = document.getElementById('edit-name').value;
+            const valAmount = Number(document.getElementById('edit-amount').value);
+            
+            // Tratamento especial dependendo da collection
+            if (type === 'variableExpenses') {
+                newData.description = valName;
+                newData.amount = valAmount;
+                newData.category = document.getElementById('edit-category').value;
+                newData.sourceId = document.getElementById('edit-source').value;
+                const selSrc = document.getElementById('edit-source');
+                if (selSrc.selectedIndex > 0) newData.sourceName = selSrc.options[selSrc.selectedIndex].text;
+            } else if (type === 'installments') {
+                newData.name = valName;
+                newData.installmentAmount = valAmount;
+                newData.remainingInstallments = Number(document.getElementById('edit-remaining').value);
+                newData.sourceId = document.getElementById('edit-source').value;
+                const selSrc = document.getElementById('edit-source');
+                if (selSrc.selectedIndex > 0) newData.sourceName = selSrc.options[selSrc.selectedIndex].text;
+            } else if (type === 'fixedExpenses') {
+                newData.name = valName;
+                newData.amount = valAmount;
+                const sourceId = document.getElementById('edit-source').value;
+                if(sourceId) {
+                    const selSrc = document.getElementById('edit-source');
+                    newData.sourceId = sourceId;
+                    newData.sourceName = selSrc.options[selSrc.selectedIndex].text;
+                }
+            }
+
+            await updateExpense(currentUserId, id, type, newData);
+            document.getElementById('modal-edit-expense').classList.add('hidden');
+            await reloadCurrentScreenData();
+        } catch(err) {
+            console.error(err);
+            alert("Erro ao atualizar!");
+        } finally { btn.disabled = false; }
+    });
+}
+
+// Handle Delete
+const btnDelete = document.getElementById('btn-delete-expense');
+if(btnDelete) {
+    btnDelete.addEventListener('click', async () => {
+        if(!confirm("Atenção: Você tem certeza que deseja excluir esta despesa?")) return;
+        
+        btnDelete.disabled = true;
+        try {
+            const id = document.getElementById('edit-id').value;
+            const type = document.getElementById('edit-type').value;
+            await deleteExpense(currentUserId, id, type);
+            
+            document.getElementById('modal-edit-expense').classList.add('hidden');
+            await reloadCurrentScreenData();
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao remover despesa!");
+        } finally { btnDelete.disabled = false; }
+    });
+}
 
 // ==========================================
 // 5. NAVEGAÇÃO BOTTOM NAV E TELAS FASE 2 & FASE 3
@@ -447,27 +725,36 @@ navItems.forEach(item => {
 
         // Modifica Título no Cabeçalho
         const headerTitle = document.getElementById('header-title');
+        const headerExtras = document.getElementById('dashboard-header-extras');
+        const btnLogout = document.getElementById('btn-logout');
 
         // Mostra a selecionada
         if(appContents[target]) {
             appContents[target].classList.remove('hidden');
             
-            // Carrega dados específicos baseados na aba
+            // Controle de visibilidade do Header
             if(target === 'dashboard') {
+                if(headerExtras) headerExtras.style.display = 'block';
+                if(btnLogout) btnLogout.style.display = 'block';
                 const name = currentProfile ? currentProfile.name.split(' ')[0] : 'Usuário';
                 headerTitle.innerHTML = `Olá, <span id="user-name-display">${name}</span>`;
-            } else if(target === 'auditoria') {
-                headerTitle.innerHTML = 'Auditar Fechamento';
-                await loadAuditData();
-            } else if(target === 'casal') {
-                headerTitle.innerHTML = 'Visão do Casal';
-                await loadCoupleData();
-            } else if(target === 'parcelas') {
-                headerTitle.innerHTML = 'Meus Cartões';
-                await loadInstallmentsScreen();
-            } else if(target === 'reports') {
-                headerTitle.innerHTML = 'Relatórios / Metas';
-                await loadReportsScreen();
+            } else {
+                if(headerExtras) headerExtras.style.display = 'none';
+                if(btnLogout) btnLogout.style.display = 'none';
+                
+                if(target === 'auditoria') {
+                    headerTitle.innerHTML = 'Auditar Fechamento';
+                    await loadAuditData();
+                } else if(target === 'casal') {
+                    headerTitle.innerHTML = 'Visão do Casal';
+                    await loadCoupleData();
+                } else if(target === 'parcelas') {
+                    headerTitle.innerHTML = 'Meus Cartões';
+                    await loadInstallmentsScreen();
+                } else if(target === 'reports') {
+                    headerTitle.innerHTML = 'Relatórios / Metas';
+                    await loadReportsScreen();
+                }
             }
         }
     });
@@ -481,53 +768,223 @@ async function loadAuditData() {
 
     try {
         document.getElementById('audit-partner-name').textContent = "Parceiro(a)"; // Ideal seria buscar o nome
+        
+        // 1. Preencher Resumo Consolidado do Parceiro (Fixo no Topo)
+        const pSummary = await getPartnerMonthSummary(currentProfile.partnerId);
+        if(pSummary) {
+            const pIncome = Number(pSummary.income || 0);
+            const pSavings = Number(pSummary.savingsGoal || 0);
+            const pProject = Number(pSummary.projectContribution || 0);
+            
+            const pFixed = await getPartnerFixedExpenses(currentProfile.partnerId);
+            const pInstal = await getPartnerInstallments(currentProfile.partnerId);
+            const pVars = await getPartnerAllVariableExpenses(currentProfile.partnerId);
 
+            let pCommitted = 0;
+            pFixed.forEach(f => pCommitted += Number(f.amount));
+            pInstal.forEach(p => pCommitted += Number(p.installmentAmount || 0));
+            
+            let pVariableSpent = 0;
+            pVars.forEach(v => pVariableSpent += Number(v.amount));
+
+            let pAvailable = pIncome - pSavings - pProject - pCommitted - pVariableSpent;
+
+            document.getElementById('audit-partner-income').textContent = formatCurrency(pIncome);
+            document.getElementById('audit-partner-fixed').textContent = formatCurrency(pCommitted);
+            document.getElementById('audit-partner-variable').textContent = formatCurrency(pVariableSpent);
+            document.getElementById('audit-partner-available').textContent = formatCurrency(pAvailable >= 0 ? pAvailable : 0);
+
+            // Vinculando o click do Card para abrir Visão Completa do parceiro
+            const summaryCard = document.getElementById('card-audit-partner-summary');
+            if (summaryCard) {
+                summaryCard.onclick = () => openPartnerDetailsModal(pFixed, pInstal, pVars);
+            }
+        }
+
+        // 2. Montar Linha do Tempo da Semana
         const currentWeek = getWeekNumber();
         const expenses = await getPartnerVariableExpenses(currentProfile.partnerId, currentWeek);
+        const logs = await getPartnerAuditLogs(currentProfile.partnerId);
         
         const listContainer = document.getElementById('audit-expense-list');
         listContainer.innerHTML = '';
 
-        if(expenses.length === 0) {
-            listContainer.innerHTML = '<li class="empty-state text-muted">Nenhum gasto do parceiro nesta semana.</li>';
+        // Mesclar TUDO em uma Timeline ordenando por data decrescente
+        const timeline = [];
+        expenses.forEach(e => timeline.push({ ...e, itemType: 'expense' }));
+        logs.forEach(l => timeline.push({ ...l, itemType: 'audit' }));
+
+        timeline.sort((a, b) => {
+            const timeA = a.createdAt?.seconds || 0;
+            const timeB = b.createdAt?.seconds || 0;
+            return timeB - timeA;
+        });
+
+        if(timeline.length === 0) {
+            listContainer.innerHTML = '<li class="empty-state text-muted">Nenhuma atividade recente do parceiro.</li>';
             return;
         }
 
-        expenses.forEach(v => {
+        timeline.forEach(item => {
             const li = document.createElement('li');
-            li.innerHTML = `
-                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0; align-items:center;">
-                    <div>
-                        <strong>${v.description}</strong> <span class="text-muted">(${v.category})</span>
-                        <br><small class="text-muted">${v.approved ? '✅ Auditado' : '⏳ Pendente'}</small>
+            
+            if (item.itemType === 'audit') {
+                // Evento de Auditoria / Ações Gerais
+                const isClosure = item.type === 'month_closure';
+                li.innerHTML = `
+                    <div style="background: ${isClosure ? 'rgba(46, 204, 113, 0.1)' : 'var(--bg-card)'}; border: 1px solid ${isClosure ? 'var(--primary-color)' : '#eee'}; border-radius: 8px; padding: 0.8rem; margin-bottom: 0.5rem;">
+                        <div style="display: flex; align-items:center; gap: 8px; margin-bottom: 4px;">
+                            ${isClosure ? '<i class="ph ph-check-circle text-main" style="font-size:1.2rem;"></i> <strong class="text-main">Fechamento de Mês</strong>' : '<i class="ph ph-info text-muted"></i> <strong>Nota de Auditoria</strong>'}
+                        </div>
+                        <p style="margin:0; font-size: 0.85rem;" class="text-muted">${item.notes}</p>
                     </div>
-                    <div style="text-align: right;">
-                        <strong class="text-danger" style="display:block;">${formatCurrency(v.amount)}</strong>
-                        ${!v.approved ? `<button class="btn-secondary btn-audit" data-id="${v.id}" style="font-size:0.7rem; padding: 0.2rem 0.5rem; margin-top:0.2rem;">Auditar</button>` : ''}
+                `;
+            } else {
+                // Despesa Variável
+                li.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0; align-items:center;">
+                        <div>
+                            <strong>${item.description}</strong> <span class="text-muted">(${item.category})</span>
+                            <br><small class="text-muted">${item.approved ? '✅ Auditado' : '⏳ Pendente'}</small>
+                        </div>
+                        <div style="text-align: right;">
+                            <strong class="text-danger" style="display:block;">${formatCurrency(item.amount)}</strong>
+                            ${!item.approved ? `<button class="btn-secondary btn-audit" data-id="${item.id}" style="font-size:0.7rem; padding: 0.2rem 0.5rem; margin-top:0.2rem;">Auditar</button>` : ''}
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            }
             listContainer.appendChild(li);
         });
 
         // Adicionar eventos dinâmicos aos botões de auditar (Mock para futuro Modal)
         document.querySelectorAll('.btn-audit').forEach(btn => {
             btn.addEventListener('click', async (e) => {
-                const note = prompt("Insira uma observação para este gasto (Auditoria):");
+                const note = prompt("Insira uma observação para este gasto:");
                 if (note !== null) {
                     await addAuditLog(currentProfile.partnerId, note);
-                    alert("Nota de auditoria salva!");
-                    // Nota: para aprovar o gasto precisa atualizar o doc de despesa do parceiro, 
-                    // Mas as regras de segurança impedem written cross-user nativamente.
-                    // Para o MVP: A nota de auditoria fica salva na coleção e isso cumpre o MVP.
+                    alert("Nota salva na timeline!");
+                    await loadAuditData(); // Recarrega
                 }
             });
         });
+
+        // 3. Carregar Meus Relatórios Arquivados
+        const archivedList = document.getElementById('archived-reports-list');
+        archivedList.innerHTML = '';
+        
+        try {
+            const myArchived = await getArchivedMonths(currentUserId);
+            if (myArchived.length === 0) {
+                archivedList.innerHTML = '<li class="empty-state text-muted">Ainda não há ciclos financeiros encerrados.</li>';
+            } else {
+                myArchived.forEach(m => {
+                    const li = document.createElement('li');
+                    
+                    // Formatar data
+                    let dateStr = 'Data Desconhecida';
+                    if (m.closedAt && m.closedAt.seconds) {
+                        const d = new Date(m.closedAt.seconds * 1000);
+                        dateStr = d.toLocaleDateString('pt-BR');
+                    }
+                    
+                    li.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; align-items:center; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                            <div>
+                                <strong>Mês Fechado</strong>
+                                <br><small class="text-muted">Encerrado em: ${dateStr}</small>
+                            </div>
+                            <button class="btn-secondary" onclick='openArchivedReportModal(${JSON.stringify(m)})'>Ver Relatório</button>
+                        </div>
+                    `;
+                    archivedList.appendChild(li);
+                });
+            }
+        } catch(e) {
+            console.error("Erro ao puxar arquivos", e);
+            archivedList.innerHTML = '<li class="empty-state text-muted text-danger">Erro ao carregar relatórios.</li>';
+        }
 
     } catch (err) {
         console.error("Erro ao carregar auditoria", err);
     }
 }
+
+// ==========================================
+// MÓDULO VISÃO COMPLETA PARCEIRO (READ-ONLY)
+// ==========================================
+function openPartnerDetailsModal(fixed, installments, variables) {
+    const listFixed = document.getElementById('partner-fixed-list');
+    const listInstal = document.getElementById('partner-installments-list');
+    const listVars = document.getElementById('partner-variables-list');
+
+    listFixed.innerHTML = '';
+    listInstal.innerHTML = '';
+    listVars.innerHTML = '';
+
+    if (fixed.length === 0) {
+        listFixed.innerHTML = '<li class="empty-state text-muted">Sem despesas fixas.</li>';
+    } else {
+        fixed.forEach(f => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                    <span><strong>${f.name}</strong> <span class="text-muted">(${f.isSubscription ? 'Assinatura' : 'Fixo'}) ${f.sourceName ? ` - ${f.sourceName}` : ''}</span></span>
+                    <strong class="text-danger">${formatCurrency(f.amount)}</strong>
+                </div>
+            `;
+            listFixed.appendChild(li);
+        });
+    }
+
+    if (installments.length === 0) {
+        listInstal.innerHTML = '<li class="empty-state text-muted">Sem parcelas ativas.</li>';
+    } else {
+        installments.forEach(p => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                    <span><strong>${p.name || p.description}</strong> <span class="text-muted">(Parcela ${p.remainingInstallments}x) ${p.sourceName ? ` - ${p.sourceName}` : ''}</span></span>
+                    <strong class="text-danger">${formatCurrency(p.installmentAmount || p.amount)}</strong>
+                </div>
+            `;
+            listInstal.appendChild(li);
+        });
+    }
+
+    if (variables.length === 0) {
+        listVars.innerHTML = '<li class="empty-state text-muted">Sem gastos registrados.</li>';
+    } else {
+        variables.sort((a,b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)).forEach(v => {
+            const li = document.createElement('li');
+            li.innerHTML = `
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                    <span><strong>${v.description}</strong> <span class="text-muted">(${v.category}) Semana ${v.weekNumber || ''}</span></span>
+                    <strong class="text-danger">${formatCurrency(v.amount)}</strong>
+                </div>
+            `;
+            listVars.appendChild(li);
+        });
+    }
+
+    document.getElementById('modal-partner-details').classList.remove('hidden');
+}
+
+// ==========================================
+// MÓDULO RELATÓRIOS ARQUIVADOS
+// ==========================================
+window.openArchivedReportModal = function(m) {
+    document.getElementById('rep-est-income').textContent = formatCurrency(m.income || 0);
+    document.getElementById('rep-act-income').textContent = formatCurrency(m.actualIncome || 0);
+    
+    document.getElementById('rep-est-savings').textContent = formatCurrency(m.savingsGoal || 0);
+    document.getElementById('rep-act-savings').textContent = formatCurrency(m.actualSavings || 0);
+    
+    document.getElementById('rep-est-project').textContent = formatCurrency(m.projectContribution || 0);
+    document.getElementById('rep-act-project').textContent = formatCurrency(m.actualProject || 0);
+    
+    document.getElementById('modal-archived-report').classList.remove('hidden');
+};
 
 async function loadCoupleData() {
     if(!currentProfile || !currentProfile.partnerId) {
@@ -536,7 +993,7 @@ async function loadCoupleData() {
     }
 
     try {
-        const myData = await getOrCreateCurrentMonth(currentUserId);
+        const myData = await getActiveMonthData(currentUserId);
         const partnerData = await getPartnerMonthSummary(currentProfile.partnerId);
 
         if(!partnerData) {
@@ -643,6 +1100,7 @@ function renderSourcesCarousel() {
     });
 
     container.innerHTML = html;
+    if(typeof rebindDragEvents === 'function') rebindDragEvents();
 }
 
 // O HTML usa onclick="selectSource(...)", por isso precisamos expor no window
@@ -745,6 +1203,7 @@ window.selectSource = function(sourceId) {
     }
 
     if(tbody) tbody.innerHTML = bodyHtml;
+    if(typeof rebindDragEvents === 'function') rebindDragEvents();
 }
 
 // ==========================================
@@ -786,7 +1245,8 @@ async function loadReportsScreen() {
         const available = maxVariableLimit - totalVariable;
         const availableLabel = available >= 0 ? available : 0;
 
-        renderBudgetChart(totalVariable, availableLabel);
+        const goalsTotal = savings + project;
+        renderBudgetChart(totalCommitted, totalVariable, goalsTotal, availableLabel);
         renderCategoryChart(categoryMap);
 
     } catch(err) {
@@ -794,7 +1254,7 @@ async function loadReportsScreen() {
     }
 }
 
-function renderBudgetChart(spent, available) {
+function renderBudgetChart(committed, variable, goals, available) {
     const ctx = document.getElementById('budgetChart').getContext('2d');
     
     if(budgetChartInstance) {
@@ -802,18 +1262,25 @@ function renderBudgetChart(spent, available) {
     }
 
     // Cores baseadas no tema dinâmico atual
-    const isLarissa = currentProfile?.name?.toLowerCase().includes('larissa') || false;
-    const mainColor = isLarissa ? '#CCA9DD' : '#2ecc71';
-    const mainHover = isLarissa ? '#b894c8' : '#27ae60';
+    // Pedido do usuário: Mostrar despesas totais fixas+parcelas em vermelho
+    const mainColor = '#ff6b6b';
+
+    // Fallback vazio se Mês não tem metas nem gastos
+    const isEmpty = (committed === 0 && variable === 0 && goals === 0 && available === 0);
+    const plotData = isEmpty ? [0, 1] : [committed, variable, goals, available];
+    
+    // Vermelho (Fixas), Laranja/Amarelo (Variáveis), Roxo (Metas), Verde (Saldo Livre)
+    const plotBg = isEmpty ? ['transparent', '#e0e0e0'] : ['#ff6b6b', '#f39c12', '#9b59b6', '#2ecc71'];
+    const plotHover = isEmpty ? ['transparent', '#d0d0d0'] : ['#ff5252', '#e67e22', '#8e44ad', '#27ae60'];
 
     budgetChartInstance = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: ['Gasto Relizado', 'Saldo Restante'],
+            labels: isEmpty ? ['Nenhum Gasto', 'Sem Receita Configurada'] : ['Desp. Fixas/Parcelas', 'Gastos Variáveis', 'Metas (Poupança/Projeto)', 'Saldo Livre/Sobra'],
             datasets: [{
-                data: [spent, available],
-                backgroundColor: [mainColor, '#e0e0e0'],
-                hoverBackgroundColor: [mainHover, '#d0d0d0'],
+                data: plotData,
+                backgroundColor: plotBg,
+                hoverBackgroundColor: plotHover,
                 borderWidth: 0
             }]
         },
@@ -841,14 +1308,20 @@ function renderCategoryChart(categoryMap) {
     // Paleta de cores para categorias
     const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#9966FF', '#FF9F40', '#4BC0C0'];
 
+    // Fallback se não há variáveis
+    const isEmpty = labels.length === 0;
+    const finalLabels = isEmpty ? ['Nenhum'] : labels;
+    const finalData = isEmpty ? [0.01] : data; // pequeno para renderizar eixo X e Y corretamente se necessário
+    const finalColors = isEmpty ? ['#e0e0e0'] : colors.slice(0, labels.length);
+
     categoryChartInstance = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: finalLabels,
             datasets: [{
                 label: 'Gastos por Categoria (R$)',
-                data: data,
-                backgroundColor: colors.slice(0, labels.length),
+                data: finalData,
+                backgroundColor: finalColors,
                 borderRadius: 4
             }]
         },
@@ -862,5 +1335,79 @@ function renderCategoryChart(categoryMap) {
                 y: { beginAtZero: true }
             }
         }
+    });
+}
+
+// ==========================================
+// UTILITÁRIOS E EXPORTAÇÃO
+// ==========================================
+function exportToCSV(dataList, headerRow) {
+    let csvContent = headerRow.join(',') + '\n';
+    
+    dataList.forEach(item => {
+        csvContent += item.join(',') + '\n';
+    });
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute("href", url);
+    link.setAttribute("download", `export_${new Date().getTime()}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// ==========================================
+// DRAG TO SCROLL (Tratamento para Tabelas e Carrosséis no Desktop)
+// ==========================================
+function rebindDragEvents() {
+    const scrollables = document.querySelectorAll('.cards-carousel, .table-responsive');
+    
+    scrollables.forEach(ele => {
+        // Remover listeners antigos (usando cloneNode, que remove event listeners de JS)
+        // Isso previne que handlers acumulem nos elementos estáticos, mas como os dinâmicos já vêm limpos,
+        // apenas verificamos se já tem a marcação
+        if (ele.dataset.dragbound === 'true') return;
+        ele.dataset.dragbound = 'true';
+
+        let pos = { top: 0, left: 0, x: 0, y: 0 };
+        let isDown = false;
+
+        const mouseDownHandler = function(e) {
+            isDown = true;
+            ele.style.cursor = 'grabbing';
+            ele.style.userSelect = 'none';
+            pos = {
+                left: ele.scrollLeft,
+                top: ele.scrollTop,
+                x: e.clientX,
+                y: e.clientY
+            };
+        };
+
+        const mouseMoveHandler = function(e) {
+            if (!isDown) return;
+            e.preventDefault();
+            const dx = e.clientX - pos.x;
+            const dy = e.clientY - pos.y;
+            ele.scrollTop = pos.top - dy;
+            ele.scrollLeft = pos.left - dx;
+        };
+
+        const mouseUpHandler = function() {
+            if (!isDown) return;
+            isDown = false;
+            ele.style.cursor = 'grab';
+            ele.style.userSelect = '';
+        };
+
+        ele.addEventListener('mousedown', mouseDownHandler);
+        ele.addEventListener('mousemove', mouseMoveHandler);
+        ele.addEventListener('mouseup', mouseUpHandler);
+        ele.addEventListener('mouseleave', mouseUpHandler);
+        ele.style.cursor = 'grab';
     });
 }
