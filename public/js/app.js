@@ -1394,43 +1394,51 @@ function exportToCSV(dataList, headerRow) {
 }
 
 // ==========================================
-// DRAG TO SCROLL (Tratamento para Tabelas e Carrosséis no Desktop)
+// DRAG TO SCROLL (Mouse-drag para desktop, touch nativo via CSS)
 // ==========================================
+// Track abort controllers per element to safely remove/rebind listeners
+const _dragControllers = new WeakMap();
+
 function rebindDragEvents() {
     const scrollables = document.querySelectorAll('.cards-carousel, .table-responsive');
-    
+
     scrollables.forEach(ele => {
-        // Clone and replace to remove any stale event listeners
-        const fresh = ele.cloneNode(true);
-        ele.parentNode.replaceChild(fresh, ele);
-        
-        let pos = { top: 0, left: 0, x: 0, y: 0 };
+        // Abort previous listeners for this exact element instance
+        if (_dragControllers.has(ele)) {
+            _dragControllers.get(ele).abort();
+        }
+        const controller = new AbortController();
+        const { signal } = controller;
+        _dragControllers.set(ele, controller);
+
+        let pos = { left: 0, top: 0, x: 0, y: 0 };
         let isDown = false;
 
-        fresh.addEventListener('mousedown', function(e) {
+        ele.addEventListener('mousedown', function(e) {
+            // Ignore if user clicked on interactive child elements
+            if (e.target.closest('button, a, input, select, .expense-item-amount')) return;
             isDown = true;
-            fresh.style.cursor = 'grabbing';
-            fresh.style.userSelect = 'none';
-            pos = { left: fresh.scrollLeft, top: fresh.scrollTop, x: e.clientX, y: e.clientY };
-        });
+            ele.style.cursor = 'grabbing';
+            ele.style.userSelect = 'none';
+            pos = { left: ele.scrollLeft, top: ele.scrollTop, x: e.clientX, y: e.clientY };
+        }, { signal });
 
-        fresh.addEventListener('mousemove', function(e) {
+        ele.addEventListener('mousemove', function(e) {
             if (!isDown) return;
             e.preventDefault();
-            fresh.scrollLeft = pos.left - (e.clientX - pos.x);
-            fresh.scrollTop = pos.top - (e.clientY - pos.y);
-        });
+            ele.scrollLeft = pos.left - (e.clientX - pos.x);
+            ele.scrollTop = pos.top - (e.clientY - pos.y);
+        }, { signal });
 
         const stopDrag = () => {
             if (!isDown) return;
             isDown = false;
-            fresh.style.cursor = 'grab';
-            fresh.style.userSelect = '';
+            ele.style.cursor = 'grab';
+            ele.style.userSelect = '';
         };
 
-        fresh.addEventListener('mouseup', stopDrag);
-        fresh.addEventListener('mouseleave', stopDrag);
-        fresh.style.cursor = 'grab';
+        ele.addEventListener('mouseup', stopDrag, { signal });
+        ele.addEventListener('mouseleave', stopDrag, { signal });
+        ele.style.cursor = 'grab';
     });
 }
-

@@ -49,8 +49,8 @@ body {
     position: relative;
     min-height: 100vh;
     box-shadow: 0 0 40px rgba(0, 0, 0, 0.08);
-    overflow-x: hidden;
-    /* Fix scroll leak on mobile */
+    /* overflow-x: clip lets children scroll independently while clipping visual bleed */
+    overflow-x: clip;
 }
 
 .hidden {
@@ -745,8 +745,9 @@ form {
     overflow-x: auto;
     border-radius: var(--radius-sm);
     background: white;
-    /* Always allow x scroll regardless of content */
+    /* Native touch scrolling on all platforms */
     -webkit-overflow-scrolling: touch;
+    touch-action: pan-x pan-y;
     /* Hide scrollbar */
     -ms-overflow-style: none;
     scrollbar-width: none;
