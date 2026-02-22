@@ -1367,14 +1367,18 @@ function renderSourcesCarousel() {
     const includeInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
     let grandTotal = 0;
     cacheInstallments.forEach(p => {
-        if (includeInst && p.remainingInstallments > 0) grandTotal += Number(p.installmentAmount);
+        // Only count active parcelas with sources
+        if (includeInst && p.remainingInstallments > 0 && p.sourceId) grandTotal += Number(p.installmentAmount);
     });
     cacheFixed.forEach(f => {
+        // Only count subscriptions/assinaturas that have a source
+        if (!f.sourceId) return;
         if (f.isSubscription && !includeInst) return;
         grandTotal += Number(f.amount);
     });
     if (includeVars && window.cacheVariables) {
-        window.cacheVariables.forEach(v => grandTotal += Number(v.amount));
+        // Only count variable expenses with a source
+        window.cacheVariables.forEach(v => { if (v.sourceId) grandTotal += Number(v.amount); });
     }
 
     let html = `
@@ -1508,7 +1512,6 @@ function renderMatrixList(items) {
             return sign * (remA - remB);
         });
     } else {
-        // source A-Z then name
         sorted.sort((a, b) => {
             const sa = a.sourceName || 'ZZZ';
             const sb = b.sourceName || 'ZZZ';
@@ -1523,39 +1526,114 @@ function renderMatrixList(items) {
         return;
     }
 
-    listEl.innerHTML = '';
-    sorted.forEach(item => {
-        const name = item.description || item.name || '—';
-        const source = item.sourceName || (item.type === 'installments' ? 'Sem fonte' : 'Despesas Fixas');
-        const isInst = item.type === 'installments';
-        const isVar = item.type === 'variableExpenses';
-        const val = Number(item.installmentAmount || item.amount || 0);
-        let typeLabel = isVar ? 'Variável' : (isInst ? `${item.remainingInstallments}x parcela` : 'Assinatura');
-        if (item.type === 'fixedExpenses' && !item.isSubscription) typeLabel = 'Fixo';
+    const isDesktop = window.innerWidth >= 1024;
 
-        // Find source color
-        let dotColor = '#8a94a6';
-        if (item.sourceId) {
-            const src = cacheSources.find(s => s.id === item.sourceId);
-            if (src && src.color) dotColor = src.color;
+    if (isDesktop) {
+        // ── Desktop: Multi-month table inline within the card ──
+        const now = new Date();
+        const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        const numMonths = 12;
+
+        let headHtml = '<tr><th class="months-sticky-col" style="min-width:170px;">Despesa</th><th class="months-sticky-col" style="min-width:90px; border-left:none;">Fonte</th><th class="months-sticky-col" style="min-width:70px; border-left:none;">Tipo</th>';
+        for (let i = 0; i < numMonths; i++) {
+            const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+            const label = i === 0 ? `<strong>${monthNames[d.getMonth()]}</strong>` : monthNames[d.getMonth()];
+            headHtml += `<th style="min-width:90px; text-align:right;">${label}<br><small style="font-weight:400;font-size:0.65rem;">${d.getFullYear()}</small></th>`;
         }
+        headHtml += '</tr>';
 
-        const li = document.createElement('li');
-        li.className = 'expense-item';
-        li.style.cursor = 'pointer';
-        li.innerHTML = `
-            <div class="expense-item-left">
-                <span class="source-color-dot" style="background:${dotColor};"></span>
-                <div class="expense-item-info">
-                    <span class="expense-item-name">${name}</span>
-                    <span class="expense-item-meta">${source} · ${typeLabel}</span>
+        const colTotals = Array(numMonths).fill(0);
+        let bodyHtml = '';
+
+        sorted.forEach(item => {
+            const name = item.description || item.name || '—';
+            const source = item.sourceName || '—';
+            const isInst = item.type === 'installments';
+            const isVar = item.type === 'variableExpenses';
+            const val = Number(item.installmentAmount || item.amount || 0);
+            let typeLabel = isVar ? 'Variável' : (isInst ? `${item.remainingInstallments}x parc.` : 'Assin.');
+            if (item.type === 'fixedExpenses' && !item.isSubscription) typeLabel = 'Fixo';
+
+            let dotColor = '#8a94a6';
+            if (item.sourceId) {
+                const src = cacheSources.find(s => s.id === item.sourceId);
+                if (src && src.color) dotColor = src.color;
+            }
+
+            bodyHtml += `<tr style="cursor:pointer;" onclick="window._openItemAction && window._openItemAction(${JSON.stringify(item).replace(/"/g, '&quot;')})">`;
+            bodyHtml += `<td class="months-sticky-col" style="min-width:170px;"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${dotColor};margin-right:6px;vertical-align:middle;"></span><strong style="font-size:0.82rem;">${name}</strong></td>`;
+            bodyHtml += `<td class="months-sticky-col" style="min-width:90px;border-left:none;font-size:0.78rem;color:var(--text-muted);">${source}</td>`;
+            bodyHtml += `<td class="months-sticky-col" style="min-width:70px;border-left:none;font-size:0.72rem;color:var(--text-muted);">${typeLabel}</td>`;
+
+            for (let i = 0; i < numMonths; i++) {
+                const active = isInst ? i < item.remainingInstallments : !isVar || i === 0;
+                const isCurrentMonth = i === 0;
+                if (active) {
+                    colTotals[i] += val;
+                    bodyHtml += `<td style="text-align:right;font-size:0.82rem;color:var(--danger-color);${isCurrentMonth ? 'font-weight:700;' : ''}">${formatCurrency(val)}</td>`;
+                } else {
+                    bodyHtml += `<td style="text-align:right;opacity:0.3;font-size:0.8rem;color:var(--text-muted);">—</td>`;
+                }
+            }
+            bodyHtml += '</tr>';
+        });
+
+        // Totals row
+        bodyHtml += `<tr class="matrix-footer"><td class="months-sticky-col" colspan="3" style="font-weight:700;font-size:0.82rem;">Total</td>`;
+        for (let i = 0; i < numMonths; i++) {
+            bodyHtml += `<td style="text-align:right;font-weight:700;color:var(--text-main);font-size:0.82rem;">${formatCurrency(colTotals[i])}</td>`;
+        }
+        bodyHtml += '</tr>';
+
+        listEl.innerHTML = `
+            <li style="list-style:none;padding:0;">
+                <div class="months-modal-scroll" style="border-radius:8px;">
+                    <table class="months-modal-table" style="width:max-content;min-width:100%;">
+                        <thead>${headHtml}</thead>
+                        <tbody>${bodyHtml}</tbody>
+                    </table>
                 </div>
-            </div>
-            <span class="expense-item-amount" style="color:var(--danger-color);">${formatCurrency(val)}</span>
+            </li>
         `;
-        li.addEventListener('click', () => openItemActionModal(item));
-        listEl.appendChild(li);
-    });
+
+        // Expose click handler
+        window._openItemAction = (item) => openItemActionModal(item);
+
+    } else {
+        // ── Mobile: standard list view ──
+        listEl.innerHTML = '';
+        sorted.forEach(item => {
+            const name = item.description || item.name || '—';
+            const source = item.sourceName || (item.type === 'installments' ? 'Sem fonte' : 'Despesas Fixas');
+            const isInst = item.type === 'installments';
+            const isVar = item.type === 'variableExpenses';
+            const val = Number(item.installmentAmount || item.amount || 0);
+            let typeLabel = isVar ? 'Variável' : (isInst ? `${item.remainingInstallments}x parcela` : 'Assinatura');
+            if (item.type === 'fixedExpenses' && !item.isSubscription) typeLabel = 'Fixo';
+
+            let dotColor = '#8a94a6';
+            if (item.sourceId) {
+                const src = cacheSources.find(s => s.id === item.sourceId);
+                if (src && src.color) dotColor = src.color;
+            }
+
+            const li = document.createElement('li');
+            li.className = 'expense-item';
+            li.style.cursor = 'pointer';
+            li.innerHTML = `
+                <div class="expense-item-left">
+                    <span class="source-color-dot" style="background:${dotColor};"></span>
+                    <div class="expense-item-info">
+                        <span class="expense-item-name">${name}</span>
+                        <span class="expense-item-meta">${source} · ${typeLabel}</span>
+                    </div>
+                </div>
+                <span class="expense-item-amount" style="color:var(--danger-color);">${formatCurrency(val)}</span>
+            `;
+            li.addEventListener('click', () => openItemActionModal(item));
+            listEl.appendChild(li);
+        });
+    }
 }
 
 window.sortMatrix = function(key) {
