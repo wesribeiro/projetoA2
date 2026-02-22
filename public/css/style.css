@@ -210,37 +210,43 @@ form {
     box-shadow: var(--shadow-lg);
     position: relative;
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: center;
     gap: 1rem;
     z-index: 1000;
 }
 
-.header-top-row {
+.header-left-col {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    position: relative;
-    z-index: 20;
-}
-
-.header-bottom-row {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-    position: relative;
+    flex-direction: column;
+    gap: 0.5rem;
     z-index: 10;
 }
 
-.header-top-row p,
-.header-bottom-row h2 {
+.header-meta-group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.header-right-col {
+    display: flex;
+    align-items: center;
+    z-index: 20;
+}
+
+.header-left-col p {
+    margin: 0;
+}
+
+.header-left-col h2 {
     margin: 0;
 }
 
 .header-title {
-    font-size: 1.2rem;
-    text-align: right;
+    font-size: 1.25rem;
+    text-align: left;
 }
 
 .header-meta-actions {
@@ -309,8 +315,8 @@ body,
 }
 
 #user-avatar-btn {
-    width: 40px;
-    height: 40px;
+    width: 58px;
+    height: 58px;
     border-radius: 50%;
     background: var(--primary-color);
     color: white;
@@ -318,7 +324,7 @@ body,
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 1.2rem;
+    font-size: 1.6rem;
     cursor: pointer;
     overflow: hidden;
     border: 2px solid white;
@@ -1422,7 +1428,7 @@ body,
         font-weight: 600;
     }
 
-    /* Header Desktop: alinha Lado a Lado na coluna direita */
+    /* Header Desktop: Lado a Lado na coluna direita */
     .app-header {
         grid-column: 2 / 3;
         grid-row: 1 / 2;
@@ -1432,26 +1438,6 @@ body,
         justify-content: space-between;
         align-items: center;
         gap: 2rem;
-    }
-
-    .header-top-row {
-        width: auto;
-        order: 1;
-        /* Esquerda no PC */
-        gap: 2rem;
-    }
-
-    .header-bottom-row {
-        width: auto;
-        order: 2;
-        /* Direita no PC */
-        justify-content: flex-end;
-        gap: 2rem;
-    }
-
-    .header-meta-actions {
-        order: -1;
-        /* Botões antes do "Olá Fulano" no HTML, mantido */
     }
 
     /* Main content area in the bottom row of the right column */

@@ -34,9 +34,20 @@
     <!-- Dashboard Principal -->
     <div id="app-screen" class="screen hidden">
         <header class="app-header">
-            <!-- Row 1: Status do Mês (Esquerda) e Avatar (Direita) -->
-            <div class="header-top-row">
-                <p id="current-month-display"><i class="ph ph-check-circle"></i> Mês Inativo</p>
+            <!-- Coluna Esquerda: Texto de Boas Vindas, Status do Mês e Botões -->
+            <div class="header-left-col">
+                <h2 id="header-title">Olá, <span id="user-name-display">Usuário</span></h2>
+                <div class="header-meta-group">
+                    <p id="current-month-display"><i class="ph ph-check-circle"></i> Mês Inativo</p>
+                    <div class="header-meta-actions">
+                        <button id="btn-start-month" class="btn-secondary btn-meta-action">Editar Metas</button>
+                        <button id="btn-close-month" class="btn-secondary btn-meta-action" style="display: none;">Encerrar Mês</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Coluna Direita: Avatar Em Destaque -->
+            <div class="header-right-col">
                 <div class="avatar-dropdown-container">
                     <div id="user-avatar-btn">
                         <span id="user-avatar-initials">U</span>
@@ -50,15 +61,6 @@
                         <button id="btn-logout"><i class="ph ph-sign-out"></i> Sair</button>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Row 2: Botões de Ação (Esquerda) e Welcome (Direita) -->
-            <div class="header-bottom-row">
-                <div class="header-meta-actions">
-                    <button id="btn-start-month" class="btn-secondary btn-meta-action">Editar Metas</button>
-                    <button id="btn-close-month" class="btn-secondary btn-meta-action" style="display: none;">Encerrar Mês</button>
-                </div>
-                <h2 id="header-title">Olá, <span id="user-name-display">Usuário</span></h2>
             </div>
         </header>
 
