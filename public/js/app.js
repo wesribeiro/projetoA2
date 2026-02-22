@@ -970,7 +970,7 @@ navItems.forEach(item => {
             // Controle de visibilidade do Header
             if(target === 'dashboard') {
                 if(headerMetaActions) headerMetaActions.style.display = 'flex';
-                if(avatarContainer) avatarContainer.style.display = 'block';
+                if(avatarContainer) avatarContainer.style.display = 'flex';
                 const name = currentProfile ? currentProfile.name.split(' ')[0] : 'Usuário';
                 headerTitle.innerHTML = `Olá, <span id="user-name-display">${name}</span>`;
             } else {

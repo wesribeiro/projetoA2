@@ -215,7 +215,15 @@ form {
     z-index: 1000;
 }
 
-.header-top-row,
+.header-top-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    position: relative;
+    z-index: 20;
+}
+
 .header-bottom-row {
     display: flex;
     justify-content: space-between;
