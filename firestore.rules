@@ -69,6 +69,12 @@ service cloud.firestore {
         allow write: if isOwner(userId) || isAdmin();
       }
 
+      // Regras de Categorias (Fase 6)
+      match /categories/{docId} {
+        allow read: if isOwner(userId) || isPartner(userId) || isAdmin();
+        allow write: if isOwner(userId) || isAdmin();
+      }
+
       // Regras Globais para Despesas Fixas e Parcelas (Fase 6)
       match /fixedExpenses/{docId} {
         allow read: if isOwner(userId) || isPartner(userId) || isAdmin();

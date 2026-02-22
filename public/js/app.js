@@ -98,7 +98,9 @@ async function loadSources() {
         // Recuperar última fonte utilizada
         const lastSource = localStorage.getItem('A2_last_source');
         if (lastSource) {
-            if (sourceVar.querySelector(`option[value="${lastSource}"]`)) sourceVar.value = lastSource;
+            if (sourceVar && sourceVar.querySelector(`option[value="${lastSource}"]`)) sourceVar.value = lastSource;
+            if (sourceInst && sourceInst.querySelector(`option[value="${lastSource}"]`)) sourceInst.value = lastSource;
+            if (sourceSub && sourceSub.querySelector(`option[value="${lastSource}"]`)) sourceSub.value = lastSource;
         }
     } catch(err) {
         console.error("Erro ao carregar fontes: ", err);
@@ -664,6 +666,9 @@ if (formSub) {
         try {
             const sel = document.getElementById('sub-source');
             const sourceName = sel.options[sel.selectedIndex].text;
+            
+            // Salva a preferência de fonte
+            localStorage.setItem('A2_last_source', sel.value);
 
             await addFixedExpense(currentUserId, {
                 name: document.getElementById('sub-name').value,
@@ -694,6 +699,9 @@ formInstallment.addEventListener('submit', async (e) => {
     try {
         const sel = document.getElementById('inst-source');
         const sourceName = sel.options[sel.selectedIndex].text;
+        
+        // Salva a preferência de fonte
+        localStorage.setItem('A2_last_source', sel.value);
 
         await addInstallment(currentUserId, {
             name: document.getElementById('inst-name').value,
