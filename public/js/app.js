@@ -1609,15 +1609,16 @@ function setupCarouselScrollSpy() {
 
 // Meses Seguintes: opens a bottom sheet with the full 12-month table
 window.openMonthsModal = function() {
-    document.getElementById('modal-months-overlay')?.remove();
+    try {
+        document.getElementById('modal-months-overlay')?.remove();
 
-    const items = window._currentMatrixItems || [];
-    const now = new Date();
-    const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-    const numMonths = 12;
+        const items = window._currentMatrixItems || [];
+        const now = new Date();
+        const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+        const numMonths = 12;
 
-    const showVar = document.getElementById('toggle-matrix-variables').checked;
-    const showInst = document.getElementById('toggle-matrix-installments').checked;
+        const showVar = document.getElementById('toggle-matrix-variables')?.checked !== false;
+        const showInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
 
     // Build header
     let headHtml = '<tr><th>Despesa / Fonte</th>';
@@ -1687,7 +1688,7 @@ window.openMonthsModal = function() {
                     <tbody>${bodyHtml}</tbody>
                 </table>
                 <div style="margin-top: 1.5rem; background: var(--bg-main); padding: 1rem; border-radius: 8px;">
-                    <h4 style="margin-bottom: 1rem; color: var(--text-color); font-size: 0.9rem; text-align: center;">Evolução da Dívida</h4>
+                    <h4 style="margin-bottom: 1rem; color: var(--text-main); font-size: 0.9rem; text-align: center;">Evolução da Dívida</h4>
                     <div style="position: relative; height: 200px;">
                         <canvas id="monthsChart"></canvas>
                     </div>
@@ -1713,7 +1714,8 @@ window.openMonthsModal = function() {
     });
 
     // Initialize Chart
-    const ctx = document.getElementById('monthsChart').getContext('2d');
+    try {
+        const ctx = document.getElementById('monthsChart').getContext('2d');
     const labels = [];
     for (let i = 0; i < numMonths; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -1750,11 +1752,25 @@ window.openMonthsModal = function() {
                 }
             },
             scales: {
-                y: { beginAtZero: true, ticks: { display: false }, grid: { color: 'rgba(200,200,200,0.1)' } },
-                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                y: { 
+                    beginAtZero: true, 
+                    ticks: { font: { size: 10 }, color: '#8a94a6' }, 
+                    grid: { color: 'rgba(0,0,0,0.05)' } 
+                },
+                x: { 
+                    ticks: { font: { size: 10 }, color: '#8a94a6' }, 
+                    grid: { display: false } 
+                }
             }
         }
     });
+    } catch(chartErr) {
+        console.error("Chart Error:", chartErr);
+    }
+    } catch(err) {
+        console.error("Critical error in openMonthsModal:", err);
+        alert("Erro interno ao calcular meses seguintes. Verifique o console.");
+    }
 };
 
 // Item Action Modal – opens when clicking a row in the installments list

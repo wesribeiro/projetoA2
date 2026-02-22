@@ -221,7 +221,8 @@ form {
     justify-content: space-between;
     align-items: center;
     width: 100%;
-    z-index: 2;
+    position: relative;
+    z-index: 10;
 }
 
 .header-top-row p,
@@ -344,7 +345,7 @@ body,
     padding: 0.5rem 0.75rem;
     font-size: 0.9rem;
     font-weight: 600;
-    color: var(--text-color);
+    color: var(--text-main);
     cursor: pointer;
     border-radius: 4px;
     display: flex;
