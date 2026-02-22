@@ -34,24 +34,23 @@
     <!-- Dashboard Principal -->
     <div id="app-screen" class="screen hidden">
         <header class="app-header">
-            <div style="display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;">
-                <h2 id="header-title" style="margin: 0;">Olá, <span id="user-name-display">Usuário</span></h2>
-                
-                <!-- Extras Exclusivos da Primeira Aba -->
-                <div id="dashboard-header-extras" style="display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;">
-                    <p id="current-month-display" style="margin: 0; font-weight: 500;">Mês Inativo</p>
-                    <div style="display: flex; gap: 0.5rem;">
-                        <button id="btn-start-month" class="btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; border-color: white; color: white;">Iniciar Mês</button>
-                        <button id="btn-close-month" class="btn-secondary" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; border-color: #ff6b6b; color: #ff6b6b; display: none;">Encerrar Mês</button>
-                    </div>
+            <div class="header-welcome-box">
+                <h2 id="header-title" style="margin: 0; font-size: 1.2rem;">Olá, <span id="user-name-display">Usuário</span></h2>
+            </div>
+            
+            <div class="header-metas-box" id="dashboard-header-extras">
+                <p id="current-month-display" style="margin: 0; font-weight: 500; font-size: 0.85rem; color: var(--primary-color); display: flex; align-items: center; gap: 0.3rem;"><i class="ph ph-check-circle"></i> Mês Inativo</p>
+                <div class="header-meta-actions" style="display: flex; gap: 0.5rem; margin-top: 5px;">
+                    <button id="btn-start-month" class="btn-secondary btn-meta-action" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; border-color: white; color: white;">Editar Metas</button>
+                    <button id="btn-close-month" class="btn-secondary btn-meta-action hidden" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; border-color: #ff6b6b; color: #ff6b6b; display: none;">Encerrar Mês</button>
                 </div>
             </div>
             
-            <div style="display: flex; align-items: center; gap: 1rem;">
+            <div class="header-avatar-box">
                 <div class="avatar-dropdown-container" style="position: relative;">
-                    <div id="user-avatar-btn" style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-color); display: flex; justify-content: center; align-items: center; cursor: pointer; color: white; font-weight: bold; overflow: hidden; box-shadow: 0 2px 5px rgba(0,0,0,0.15); transition: transform 0.2s;">
+                    <div id="user-avatar-btn" style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-color); display: flex; justify-content: center; align-items: center; cursor: pointer; color: white; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.15); transition: transform 0.2s;">
                         <span id="user-avatar-initials">U</span>
-                        <img id="user-avatar-img" src="" style="width: 100%; height: 100%; object-fit: cover; display: none;">
+                        <img id="user-avatar-img" src="" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: none;">
                     </div>
                     <div id="avatar-dropdown-menu" style="display: none; position: absolute; right: 0; top: 120%; background: var(--card-bg); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); min-width: 180px; z-index: 1000; overflow: hidden; flex-direction: column;">
                         <button id="btn-edit-profile" style="padding: 0.75rem 1rem; text-align: left; background: none; border: none; cursor: pointer; color: var(--text-main); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; width: 100%; border-bottom: 1px solid #eee;">
@@ -158,11 +157,24 @@
                             <ul id="fixed-expense-list" class="expense-list" style="padding: 0 0.25rem;"></ul>
                         </div>
                         <div id="despesas-detail-wrap" class="hidden" style="border-top:1px solid #f0f4f8; padding-top:0.5rem;">
+                            <!-- ... legacy detail ... -->
                             <ul id="fixed-expense-detail" class="expense-list" style="padding: 0 0.25rem;"></ul>
                         </div>
                     </section>
-
-                    <!-- Card Gastos Mensais (Variáveis) -->
+                    
+                    <!-- Card Gastos do Mês -->
+                    <section class="card" id="card-gastos-mes" style="margin-bottom: 1rem;">
+                        <div class="card-header" style="padding-bottom: 0;">
+                            <div style="display: flex; justify-content: space-between; width: 100%; align-items: center;">
+                                <h3 style="font-size: 0.85rem; color: var(--text-muted); text-transform: uppercase;">Gastos do Mês</h3>
+                                <strong id="week-spent" class="text-danger">R$ 0,00</strong>
+                            </div>
+                        </div>
+                        <ul id="variable-expense-list" class="expense-list" style="margin-top: 1rem; padding: 0 0.25rem;">
+                            <li class="empty-state text-muted">Nenhum gasto registrado.</li>
+                        </ul>
+                    </section>
+                </div>
                     <section class="card" id="card-gastos-mes" style="display: none;">
                         <div class="card-header">
                             <h3>Gastos do Mês</h3>
