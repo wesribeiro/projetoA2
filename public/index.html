@@ -34,40 +34,31 @@
     <!-- Dashboard Principal -->
     <div id="app-screen" class="screen hidden">
         <header class="app-header">
-            <div class="header-welcome-box">
-                <h2 id="header-title" style="margin: 0; font-size: 1.2rem;">Olá, <span id="user-name-display">Usuário</span></h2>
-            </div>
-            
-            <div class="header-metas-box" id="dashboard-header-extras">
-                <p id="current-month-display" style="margin: 0; font-weight: 500; font-size: 0.85rem; color: var(--primary-color); display: flex; align-items: center; gap: 0.3rem;"><i class="ph ph-check-circle"></i> Mês Inativo</p>
-                <div class="header-meta-actions" style="display: flex; gap: 0.5rem; margin-top: 5px;">
-                    <button id="btn-start-month" class="btn-secondary btn-meta-action" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; border-color: white; color: white;">Editar Metas</button>
-                    <button id="btn-close-month" class="btn-secondary btn-meta-action hidden" style="font-size: 0.75rem; padding: 0.3rem 0.6rem; border-color: #ff6b6b; color: #ff6b6b; display: none;">Encerrar Mês</button>
-                </div>
-            </div>
-            
-            <div class="header-avatar-box">
-                <div class="avatar-dropdown-container" style="position: relative;">
-                    <div id="user-avatar-btn" style="width: 40px; height: 40px; border-radius: 50%; background: var(--primary-color); display: flex; justify-content: center; align-items: center; cursor: pointer; color: white; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.15); transition: transform 0.2s;">
+            <!-- Row 1: Status do Mês (Esquerda) e Avatar (Direita) -->
+            <div class="header-top-row">
+                <p id="current-month-display"><i class="ph ph-check-circle"></i> Mês Inativo</p>
+                <div class="avatar-dropdown-container">
+                    <div id="user-avatar-btn">
                         <span id="user-avatar-initials">U</span>
-                        <img id="user-avatar-img" src="" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; display: none;">
+                        <img id="user-avatar-img" src="" style="display: none;">
                     </div>
-                    <div id="avatar-dropdown-menu" style="display: none; position: absolute; right: 0; top: 120%; background: var(--card-bg); border-radius: var(--radius-sm); box-shadow: var(--shadow-lg); min-width: 180px; z-index: 1000; overflow: hidden; flex-direction: column;">
-                        <button id="btn-edit-profile" style="padding: 0.75rem 1rem; text-align: left; background: none; border: none; cursor: pointer; color: var(--text-main); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; width: 100%; border-bottom: 1px solid #eee;">
-                            <i class="ph ph-user"></i> Meu Perfil
-                        </button>
-                        
-                        <div id="admin-switch-container" style="display: none; flex-direction: column; border-bottom: 1px solid #eee;">
-                            <button id="btn-admin-switch" style="padding: 0.75rem 1rem; text-align: left; background: none; border: none; cursor: pointer; color: var(--text-main); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; width: 100%;">
-                                <i class="ph ph-arrows-left-right"></i> Trocar de Perfil
-                            </button>
+                    <div id="avatar-dropdown-menu" style="display: none;">
+                        <button id="btn-edit-profile"><i class="ph ph-user"></i> Meu Perfil</button>
+                        <div id="admin-switch-container" style="display: none;">
+                            <button id="btn-admin-switch"><i class="ph ph-arrows-left-right"></i> Trocar de Perfil</button>
                         </div>
-
-                        <button id="btn-logout" style="padding: 0.75rem 1rem; text-align: left; background: none; border: none; cursor: pointer; color: var(--danger-color); font-size: 0.9rem; display: flex; align-items: center; gap: 0.5rem; width: 100%;">
-                            <i class="ph ph-sign-out"></i> Sair
-                        </button>
+                        <button id="btn-logout"><i class="ph ph-sign-out"></i> Sair</button>
                     </div>
                 </div>
+            </div>
+            
+            <!-- Row 2: Botões de Ação (Esquerda) e Welcome (Direita) -->
+            <div class="header-bottom-row">
+                <div class="header-meta-actions">
+                    <button id="btn-start-month" class="btn-secondary btn-meta-action">Editar Metas</button>
+                    <button id="btn-close-month" class="btn-secondary btn-meta-action" style="display: none;">Encerrar Mês</button>
+                </div>
+                <h2 id="header-title">Olá, <span id="user-name-display">Usuário</span></h2>
             </div>
         </header>
 
@@ -173,19 +164,6 @@
                         <ul id="variable-expense-list" class="expense-list" style="margin-top: 1rem; padding: 0 0.25rem;">
                             <li class="empty-state text-muted">Nenhum gasto registrado.</li>
                         </ul>
-                    </section>
-                </div>
-                    <section class="card" id="card-gastos-mes" style="display: none;">
-                        <div class="card-header">
-                            <h3>Gastos do Mês</h3>
-                            <h3 id="week-spent">R$ 0,00</h3>
-                        </div>
-                        <div class="card-body">
-                            <ul id="variable-expense-list" class="expense-list">
-                                <!-- Itens renderizados no JS -->
-                                <li class="empty-state">Nenhum gasto registrado.</li>
-                            </ul>
-                        </div>
                     </section>
                 </div>
             </div>
@@ -822,10 +800,11 @@
                     <input type="text" id="profile-display-name" required placeholder="Ex: Wesley">
                 </div>
                 <div class="input-group">
-                    <label>URL do Avatar (Opcional)</label>
-                    <input type="url" id="profile-photo-url" placeholder="https://exemplo.com/foto.jpg">
-                    <p class="input-help">Deixe em branco para usar as iniciais.</p>
+                    <label>Trocar Avatar (Imagem)</label>
+                    <input type="file" id="profile-photo-file" accept="image/png, image/jpeg, image/webp" style="padding: 0.5rem; border: 1px solid #ccc; border-radius: var(--radius-sm); width: 100%;">
+                    <p class="input-help">Escolha uma foto quadrada para o seu perfil. Máx 2MB.</p>
                 </div>
+                <input type="hidden" id="profile-photo-url">
                 <button type="submit" class="btn-primary" style="margin-top: 1rem;">Salvar Alterações</button>
             </form>
         </div>

@@ -209,37 +209,38 @@ form {
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     box-shadow: var(--shadow-lg);
     position: relative;
-    /* overflow: hidden removido para permitir o dropdown do avatar */
-    display: grid;
-    grid-template-columns: 1fr auto;
-    grid-template-areas:
-        "metas avatar"
-        "metas welcome";
-    align-items: start;
-    gap: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
     z-index: 1000;
 }
 
-.header-metas-box {
-    grid-area: metas;
+.header-top-row,
+.header-bottom-row {
     display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
     z-index: 2;
 }
 
-.header-avatar-box {
-    grid-area: avatar;
-    justify-self: end;
-    z-index: 3;
+.header-top-row p,
+.header-bottom-row h2 {
+    margin: 0;
 }
 
-.header-welcome-box {
-    grid-area: welcome;
-    justify-self: end;
+.header-title {
+    font-size: 1.2rem;
     text-align: right;
-    margin-top: 5px;
-    z-index: 2;
+}
+
+.header-meta-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.avatar-dropdown-container {
+    position: relative;
 }
 
 /* Impede scroll horizontal devido às decorações do header que vazam */
@@ -1278,6 +1279,7 @@ body,
     body {
         background: var(--bg-main);
         align-items: flex-start;
+        justify-content: flex-start;
     }
 
     /* Expand screen to full width in tablet */
@@ -1288,6 +1290,8 @@ body,
         grid-template-columns: 80px 1fr;
         grid-template-rows: auto 1fr;
         min-height: 100vh;
+        margin: 0;
+        /* Remove auto center margin */
     }
 
     /* Bottom nav becomes sidebar on the left */
@@ -1297,6 +1301,7 @@ body,
         position: fixed;
         /* Fix for sticky not reaching bottom */
         width: 80px;
+        left: 0;
         top: 0;
         bottom: 0;
         height: 100vh;
@@ -1336,27 +1341,31 @@ body,
         grid-column: 2 / 3;
         grid-row: 1 / 2;
         border-radius: 0;
-        padding: 1rem 2rem;
-        display: flex;
+        padding: 1.5rem 2rem;
         flex-direction: row;
+        justify-content: space-between;
         align-items: center;
-        justify-content: flex-start;
         gap: 2rem;
     }
 
-    .header-welcome-box {
-        margin-right: 1rem;
-        margin-top: 0;
-        text-align: left;
+    .header-top-row {
+        width: auto;
+        order: 1;
+        /* Esquerda no PC */
+        gap: 2rem;
     }
 
-    .header-metas-box {
-        flex: 1;
-        /* Empurra o avatar para a direita */
+    .header-bottom-row {
+        width: auto;
+        order: 2;
+        /* Direita no PC */
+        justify-content: flex-end;
+        gap: 2rem;
     }
 
-    .header-avatar-box {
-        margin-left: auto;
+    .header-meta-actions {
+        order: -1;
+        /* Botões antes do "Olá Fulano" no HTML, mantido */
     }
 
     /* Main content area in the bottom row of the right column */
@@ -1366,7 +1375,9 @@ body,
         padding: 1.5rem 2rem;
         overflow-y: auto;
         max-width: 100%;
-        /* removing artificial constraint */
+        margin: 0;
+        width: 100%;
+        box-sizing: border-box;
     }
 
     /* Cards grid: 2 cols in tablet */
@@ -1403,6 +1414,7 @@ body,
     .app-content {
         padding: 2rem 3rem;
         max-width: 1200px;
+        margin: 0;
         /* Let it grow for 2 cols */
     }
 

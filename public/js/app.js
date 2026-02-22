@@ -377,21 +377,17 @@ async function loadDashboardData() {
                 sourceMap[key].items.push({ name: `${v.description} (Variável)`, amount });
             }
             
-            // Soma gastos da semana e adiciona na lista UI (Card da Semana)
-            if (v.weekNumber === currentWeekNumber) {
-                totalVariableWeek += amount;
-                
-                const li = document.createElement('li');
-                li.style.cursor = 'pointer';
-                li.innerHTML = `
-                    <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
-                        <span><strong>${v.description}</strong> <span class="text-muted">(${v.category})</span></span>
-                        <strong class="text-danger">${formatCurrency(amount)}</strong>
-                    </div>
-                `;
-                li.addEventListener('click', () => openEditModal({ ...v, type: 'variableExpenses' }));
-                listContainer.appendChild(li);
-            }
+            // Adiciona na lista UI (Card Gastos do Mês)
+            const li = document.createElement('li');
+            li.style.cursor = 'pointer';
+            li.innerHTML = `
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 0.5rem 0;">
+                    <span><strong>${v.description}</strong> <span class="text-muted">(${v.category})</span></span>
+                    <strong class="text-danger">${formatCurrency(amount)}</strong>
+                </div>
+            `;
+            li.addEventListener('click', () => openEditModal({ ...v, type: 'variableExpenses' }));
+            listContainer.appendChild(li);
         });
 
         const cardGastosMes = document.getElementById('card-gastos-mes');
@@ -2060,6 +2056,7 @@ if (btnEditProfile) {
         avatarMenu.style.display = 'none';
         document.getElementById('profile-display-name').value = currentProfile?.displayName || currentProfile?.name || document.getElementById('user-name-display').textContent;
         document.getElementById('profile-photo-url').value = currentProfile?.photoURL || '';
+        if (document.getElementById('profile-photo-file')) document.getElementById('profile-photo-file').value = '';
         modalEditProfile.classList.remove('hidden');
     });
 }
@@ -2072,7 +2069,38 @@ if (formEditProfile) {
         btn.textContent = 'Salvando...';
         try {
             const newName = document.getElementById('profile-display-name').value.trim();
-            const newPhoto = document.getElementById('profile-photo-url').value.trim();
+            let newPhoto = document.getElementById('profile-photo-url').value.trim();
+            const fileInput = document.getElementById('profile-photo-file');
+
+            if (fileInput && fileInput.files && fileInput.files[0]) {
+                const file = fileInput.files[0];
+                newPhoto = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = new Image();
+                        img.onload = () => {
+                            // Cropping to Square (center)
+                            const minSize = Math.min(img.width, img.height);
+                            const startX = (img.width - minSize) / 2;
+                            const startY = (img.height - minSize) / 2;
+
+                            const canvas = document.createElement('canvas');
+                            const targetSize = 150; 
+                            canvas.width = targetSize;
+                            canvas.height = targetSize;
+                            const ctx = canvas.getContext('2d');
+                            // Draw the central square cropped to targetSize
+                            ctx.drawImage(img, startX, startY, minSize, minSize, 0, 0, targetSize, targetSize);
+                            
+                            resolve(canvas.toDataURL('image/webp', 0.8));
+                        };
+                        img.onerror = () => reject(new Error("Erro ao ler imagem"));
+                        img.src = e.target.result;
+                    };
+                    reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
+                    reader.readAsDataURL(file);
+                });
+            }
             
             await updateUserProfile(currentUserId, {
                 displayName: newName,
