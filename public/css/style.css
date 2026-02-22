@@ -1156,7 +1156,15 @@ body,
     white-space: nowrap;
     display: inline-flex;
     align-items: center;
+    flex-direction: row;
     gap: 4px;
+}
+
+.sort-btn .ph {
+    display: inline !important;
+    vertical-align: middle;
+    font-size: 0.8em;
+    line-height: 1;
 }
 
 .sort-btn:hover {
@@ -1471,6 +1479,43 @@ body,
         border-radius: var(--radius-lg);
         max-height: 80vh;
         margin-bottom: 5vh;
+    }
+}
+
+/* =========================================
+   Responsive — Tablet Landscape 1340x800
+   ========================================= */
+@media (min-width: 1200px) and (max-width: 1440px) {
+    .screen {
+        grid-template-columns: 220px 1fr;
+    }
+
+    .bottom-nav {
+        width: 220px;
+        padding: 2rem 1rem;
+    }
+
+    .bottom-nav li {
+        flex-direction: row;
+        justify-content: flex-start;
+        white-space: nowrap;
+    }
+
+    .nav-label {
+        display: block;
+        font-size: 0.85rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1.2rem;
+    }
+
+    .app-content {
+        padding: 1.5rem 2.5rem;
     }
 }
 

@@ -52,8 +52,14 @@ window.addEventListener('user-logged-in', async (e) => {
     const avatarInitials = document.getElementById('user-avatar-initials');
     const avatarImg = document.getElementById('user-avatar-img');
     if (avatarInitials && avatarImg) {
-        if (currentProfile?.photoURL) {
-            avatarImg.src = currentProfile.photoURL;
+        let photoUrl = currentProfile?.photoURL || null;
+        // Resolve local avatar: base64 is stored in localStorage to avoid Firestore 1MB limit
+        if (photoUrl === '__local__') {
+            photoUrl = localStorage.getItem(`A2_avatar_${currentUserId}`) || null;
+        }
+        
+        if (photoUrl) {
+            avatarImg.src = photoUrl;
             avatarImg.style.display = 'block';
             avatarInitials.style.display = 'none';
         } else {
@@ -2107,12 +2113,13 @@ if (formEditProfile) {
         btn.textContent = 'Salvando...';
         try {
             const newName = document.getElementById('profile-display-name').value.trim();
-            let newPhoto = document.getElementById('profile-photo-url').value.trim();
+            let newPhoto = document.getElementById('profile-photo-url').value.trim(); // URL-based fallback
+            let localPhotoBase64 = null; // Only set when a local file is selected
             const fileInput = document.getElementById('profile-photo-file');
 
             if (fileInput && fileInput.files && fileInput.files[0]) {
                 const file = fileInput.files[0];
-                newPhoto = await new Promise((resolve, reject) => {
+                localPhotoBase64 = await new Promise((resolve, reject) => {
                     const reader = new FileReader();
                     reader.onload = (e) => {
                         const img = new Image();
@@ -2127,10 +2134,8 @@ if (formEditProfile) {
                             canvas.width = targetSize;
                             canvas.height = targetSize;
                             const ctx = canvas.getContext('2d');
-                            // Draw the central square cropped to targetSize
                             ctx.drawImage(img, startX, startY, minSize, minSize, 0, 0, targetSize, targetSize);
-                            
-                            resolve(canvas.toDataURL('image/webp', 0.8));
+                            resolve(canvas.toDataURL('image/webp', 0.75));
                         };
                         img.onerror = () => reject(new Error("Erro ao ler imagem"));
                         img.src = e.target.result;
@@ -2138,12 +2143,23 @@ if (formEditProfile) {
                     reader.onerror = () => reject(new Error("Erro ao ler arquivo"));
                     reader.readAsDataURL(file);
                 });
+                
+                // Store avatar in localStorage to avoid exceeding Firestore 1MB document limit
+                try {
+                    localStorage.setItem(`A2_avatar_${currentUserId}`, localPhotoBase64);
+                    newPhoto = '__local__'; // flag indicating photo is in localStorage
+                } catch (storageErr) {
+                    // localStorage quota exceeded — fallback to URL only
+                    console.warn('localStorage quota exceeded for avatar:', storageErr);
+                    localPhotoBase64 = null;
+                }
             }
             
-            await updateUserProfile(currentUserId, {
-                displayName: newName,
-                photoURL: newPhoto
-            });
+            // Only write displayName and the photo flag (not the full base64) to Firestore
+            const firestoreData = { displayName: newName };
+            if (newPhoto) firestoreData.photoURL = newPhoto; // could be a URL or '__local__'
+            
+            await updateUserProfile(currentUserId, firestoreData);
             
             if (!currentProfile) currentProfile = {};
             currentProfile.displayName = newName;
@@ -2154,8 +2170,14 @@ if (formEditProfile) {
             
             const avatarInitials = document.getElementById('user-avatar-initials');
             const avatarImg = document.getElementById('user-avatar-img');
-            if (newPhoto) {
-                avatarImg.src = newPhoto;
+            
+            // Resolve local avatar: if photo is '__local__', read from localStorage
+            const resolvedPhoto = newPhoto === '__local__'
+                ? (localPhotoBase64 || localStorage.getItem(`A2_avatar_${currentUserId}`))
+                : newPhoto;
+            
+            if (resolvedPhoto) {
+                avatarImg.src = resolvedPhoto;
                 avatarImg.style.display = 'block';
                 avatarInitials.style.display = 'none';
             } else {
@@ -2166,7 +2188,7 @@ if (formEditProfile) {
             }
 
             modalEditProfile.classList.add('hidden');
-            showToast('Perfil atualizado com sucesso!');
+            showToast('Foto de perfil salva com sucesso!');
         } catch (err) {
             console.error(err);
             alert("Erro ao salvar perfil.");
