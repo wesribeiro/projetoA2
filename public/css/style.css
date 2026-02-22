@@ -292,6 +292,79 @@ body,
     z-index: 1;
 }
 
+/* Avatar Styles */
+.avatar-dropdown-container {
+    position: relative;
+    display: flex;
+    align-items: center;
+}
+
+#user-avatar-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--primary-color);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.2rem;
+    cursor: pointer;
+    overflow: hidden;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+#user-avatar-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+#avatar-dropdown-menu {
+    position: absolute;
+    top: 50px;
+    right: 0;
+    background: white;
+    border-radius: var(--radius-sm);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.15);
+    padding: 0.5rem;
+    min-width: 160px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+}
+
+#avatar-dropdown-menu button {
+    background: transparent;
+    border: none;
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-color);
+    cursor: pointer;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: background 0.2s;
+}
+
+#avatar-dropdown-menu button:hover {
+    background: #f0f4f8;
+}
+
+/* Mobile buttons size adjustments */
+@media (max-width: 767px) {
+    .btn-meta-action {
+        padding: 0.4rem 0.6rem !important;
+        font-size: 0.7rem !important;
+    }
+}
+
 /* =========================================
    App Content
    ========================================= */
@@ -1056,7 +1129,7 @@ body,
    Sort Buttons (Installments Screen)
    ========================================= */
 .sort-btn {
-    padding: 0.25rem 0.75rem;
+    padding: 0.25rem 1rem;
     border-radius: 20px;
     border: 1.5px solid #dde3ec;
     background: white;
@@ -1065,6 +1138,10 @@ body,
     color: var(--text-muted);
     cursor: pointer;
     transition: all 0.2s ease;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
 }
 
 .sort-btn:hover {
@@ -1413,7 +1490,7 @@ body,
 
     .app-content {
         padding: 2rem 3rem;
-        max-width: 1200px;
+        max-width: 100%;
         margin: 0;
         /* Let it grow for 2 cols */
     }
@@ -1434,4 +1511,25 @@ body,
         grid-template-columns: 6fr 4fr;
         /* Left col slightly larger for main card + graphs */
     }
+}
+
+/* =========================================
+   Skeleton Loaders
+   ========================================= */
+@keyframes shimmer {
+    0% {
+        background-position: -1000px 0;
+    }
+
+    100% {
+        background-position: 1000px 0;
+    }
+}
+
+.skeleton-shimmer {
+    animation: shimmer 2s infinite linear;
+    background: linear-gradient(to right, #f6f7f8 4%, #edeef1 25%, #f6f7f8 36%);
+    background-size: 1000px 100%;
+    position: relative;
+    overflow: hidden;
 }

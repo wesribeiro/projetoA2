@@ -960,8 +960,8 @@ navItems.forEach(item => {
 
         // Modifica Título no Cabeçalho
         const headerTitle = document.getElementById('header-title');
-        const headerExtras = document.getElementById('dashboard-header-extras');
-        const btnLogout = document.getElementById('btn-logout');
+        const headerMetaActions = document.querySelector('.header-meta-actions');
+        const avatarContainer = document.querySelector('.avatar-dropdown-container');
 
         // Mostra a selecionada
         if(appContents[target]) {
@@ -969,13 +969,13 @@ navItems.forEach(item => {
             
             // Controle de visibilidade do Header
             if(target === 'dashboard') {
-                if(headerExtras) headerExtras.style.display = 'block';
-                if(btnLogout) btnLogout.style.display = 'block';
+                if(headerMetaActions) headerMetaActions.style.display = 'flex';
+                if(avatarContainer) avatarContainer.style.display = 'block';
                 const name = currentProfile ? currentProfile.name.split(' ')[0] : 'Usuário';
                 headerTitle.innerHTML = `Olá, <span id="user-name-display">${name}</span>`;
             } else {
-                if(headerExtras) headerExtras.style.display = 'none';
-                if(btnLogout) btnLogout.style.display = 'none';
+                if(headerMetaActions) headerMetaActions.style.display = 'none';
+                if(avatarContainer) avatarContainer.style.display = 'none';
                 
                 if(target === 'auditoria') {
                     headerTitle.innerHTML = 'Auditar Fechamento';
@@ -1287,6 +1287,27 @@ async function loadCoupleData() {
 async function loadInstallmentsScreen() {
     if(!currentUserId) return;
 
+    const listEl = document.getElementById('matrix-list');
+    const carouselEl = document.getElementById('sources-carousel');
+    
+    // Injetar Skeletons
+    if (carouselEl) {
+        carouselEl.innerHTML = `
+            <div class="skeleton-shimmer" style="min-width: 240px; height: 140px; border-radius: var(--radius-md); background: var(--card-bg);"></div>
+            <div class="skeleton-shimmer" style="min-width: 240px; height: 140px; border-radius: var(--radius-md); background: var(--card-bg);"></div>
+        `;
+    }
+    if (listEl) {
+        let skels = '';
+        for(let i=0; i<4; i++) {
+            skels += `<li style="padding: 1rem 0; border-bottom: 1px solid #eee; display:flex; justify-content:space-between;">
+                <div class="skeleton-shimmer" style="width: 60%; height: 20px; border-radius: 4px; background: #eaedf1;"></div>
+                <div class="skeleton-shimmer" style="width: 20%; height: 20px; border-radius: 4px; background: #eaedf1;"></div>
+            </li>`;
+        }
+        listEl.innerHTML = skels;
+    }
+
     try {
         cacheSources = await getSources(currentUserId);
         cacheInstallments = await getInstallments(currentUserId);
@@ -1406,7 +1427,8 @@ window.selectSource = function(sourceId) {
     // Scroll automatically if not user scroll
     if (!window._isProgrammaticScroll && selCard) {
         window._isProgrammaticScroll = true;
-        selCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        // inline: 'nearest' prevents the layout breaking empty void when focusing the last card
+        selCard.scrollIntoView({ behavior: 'smooth', inline: 'nearest', block: 'nearest' });
         setTimeout(() => { window._isProgrammaticScroll = false; }, 600);
     }
 
