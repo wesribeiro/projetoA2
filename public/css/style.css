@@ -205,10 +205,11 @@ form {
 .app-header {
     background: var(--header-bg);
     color: white;
-    padding: 2rem 1.5rem 1.5rem;
+    padding: 1.5rem 1.5rem;
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
     align-items: flex-start;
+    gap: 1rem;
     border-radius: 0 0 var(--radius-lg) var(--radius-lg);
     box-shadow: var(--shadow-lg);
     position: relative;
@@ -1203,9 +1204,45 @@ form {
 }
 
 /* =========================================
-   Responsive — Tablet (>= 768px)
+   Skeleton Loading Animation
    ========================================= */
-@media (min-width: 768px) {
+.skeleton {
+    position: relative;
+    overflow: hidden;
+    background-color: #e2e8f0;
+    color: transparent !important;
+    border-radius: var(--radius-sm);
+    min-width: 60px;
+    min-height: 1.25em;
+    display: inline-block;
+}
+
+.skeleton::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 1.5s infinite;
+}
+
+.skeleton * {
+    visibility: hidden;
+}
+
+@keyframes shimmer {
+    100% {
+        transform: translateX(100%);
+    }
+}
+
+/* =========================================
+   Responsive — Tablet Landscape / Small PC (>= 1024px)
+   ========================================= */
+@media (min-width: 1024px) {
     body {
         background: var(--bg-main);
         align-items: flex-start;
@@ -1216,18 +1253,20 @@ form {
         max-width: 100%;
         width: 100%;
         display: grid;
-        grid-template-columns: 240px 1fr;
+        grid-template-columns: 180px 1fr;
         grid-template-rows: auto 1fr;
         min-height: 100vh;
-        overflow-x: hidden;
     }
 
     /* Bottom nav becomes sidebar on the left */
     .bottom-nav {
         grid-column: 1 / 2;
         grid-row: 1 / 3;
-        position: sticky;
+        position: fixed;
+        /* Fix for sticky not reaching bottom */
+        width: 180px;
         top: 0;
+        bottom: 0;
         height: 100vh;
         flex-direction: column;
         justify-content: flex-start;
@@ -1237,6 +1276,9 @@ form {
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04);
         gap: 0.5rem;
         align-items: stretch;
+        background: #fff;
+        z-index: 100;
+        overflow-y: auto;
     }
 
     .bottom-nav li {
@@ -1262,7 +1304,12 @@ form {
         grid-column: 2 / 3;
         grid-row: 1 / 2;
         border-radius: 0;
-        padding: 1.5rem 2rem;
+        padding: 1rem 2rem;
+        display: flex;
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
     }
 
     /* Main content area in the bottom row of the right column */
@@ -1271,7 +1318,8 @@ form {
         grid-row: 2 / 3;
         padding: 1.5rem 2rem;
         overflow-y: auto;
-        max-width: none;
+        max-width: 100%;
+        /* removing artificial constraint */
     }
 
     /* Cards grid: 2 cols in tablet */
@@ -1301,21 +1349,24 @@ form {
    ========================================= */
 @media (min-width: 1280px) {
     .screen {
-        grid-template-columns: 260px 1fr;
+        grid-template-columns: 180px 1fr;
+        /* Reduced sidebar thickness from 260 to 180px */
     }
 
     .app-content {
         padding: 2rem 3rem;
-        max-width: 900px;
+        max-width: 1200px;
+        /* Let it grow for 2 cols */
     }
 
     .bottom-nav {
-        min-height: calc(100vh - 80px);
-        padding: 2rem 1.25rem;
+        width: 180px;
+        padding: 2rem 1.25px;
     }
 
-    /* Cards 3-col grid in desktop */
+    /* Cards 2-col grid in desktop (User requested 2 cols instead of 3 for better use) */
     .dashboard-grid {
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: 6fr 4fr;
+        /* Left col slightly larger for main card + graphs */
     }
 }

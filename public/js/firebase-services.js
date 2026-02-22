@@ -158,10 +158,13 @@ export async function getUserProfile(userId) {
     // Para simplificar, vamos ler o doc root:
     const userRef = doc(db, "users", userId);
     const snap = await getDoc(userRef);
-    if(snap.exists()) {
-        return snap.data();
-    }
-    return null; // Caso não tenha profile definido nativamente ainda
+    if (!snap.exists()) return null;
+    return snap.data();
+}
+
+export async function updateUserProfile(userId, data) {
+    const userRef = doc(db, "users", userId);
+    await setDoc(userRef, data, { merge: true });
 }
 
 export async function getPartnerVariableExpenses(partnerId, targetWeek) {

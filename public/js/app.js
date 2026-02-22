@@ -33,7 +33,7 @@ window.addEventListener('user-logged-in', async (e) => {
     currentProfile = await getUserProfile(currentUserId);
     
     // Atualiza nome de exibição e Tema Visual
-    const rawName = currentProfile?.name || email.split('@')[0];
+    const rawName = currentProfile?.displayName || currentProfile?.name || email.split('@')[0];
     const displayFirst = rawName.split(' ')[0];
     
     // Switch de Tema (Requisito Fase 3)
@@ -47,6 +47,22 @@ window.addEventListener('user-logged-in', async (e) => {
     }
 
     document.getElementById('user-name-display').textContent = displayFirst;
+    
+    // Avatar Logic
+    const avatarInitials = document.getElementById('user-avatar-initials');
+    const avatarImg = document.getElementById('user-avatar-img');
+    if (avatarInitials && avatarImg) {
+        if (currentProfile?.photoURL) {
+            avatarImg.src = currentProfile.photoURL;
+            avatarImg.style.display = 'block';
+            avatarInitials.style.display = 'none';
+        } else {
+            avatarInitials.textContent = displayFirst.charAt(0).toUpperCase();
+            avatarInitials.style.display = 'block';
+            avatarImg.style.display = 'none';
+            avatarImg.src = '';
+        }
+    }
     
     // Atualiza nome do mês
     const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
@@ -67,7 +83,7 @@ window.addEventListener('user-logged-in', async (e) => {
     } else {
         await loadSources();
         await loadCategories();
-        await loadDashboardData();
+        await reloadCurrentScreenData();
     }
 });
 
@@ -195,7 +211,11 @@ function showToast(message, type = 'success') {
 // 2. LÓGICA DO DASHBOARD
 // ==========================================
 function toggleSkeleton(show) {
-    const ids = ['available-balance', 'total-income', 'savings-goal', 'project-contribution', 'committed-total', 'week-spent'];
+    const ids = [
+        'available-balance', 'total-income', 'savings-goal', 'project-contribution', 
+        'committed-total', 'week-spent', 'total-despesas', 'total-fixed', 
+        'total-installments', 'total-variables', 'fixed-spent'
+    ];
     ids.forEach(id => {
         const el = document.getElementById(id);
         if (el) {
@@ -298,6 +318,10 @@ async function loadDashboardData() {
         let totalCommitted = 0;
         let totalVariableMonth = 0;
         let totalVariableWeek = 0;
+
+        let sumFixed = 0;
+        let sumInstallments = 0;
+        let sumVariables = 0;
         
         const now = new Date();
         const firstDay = new Date(now.getFullYear(), now.getMonth(), 1).getDay();
@@ -310,6 +334,10 @@ async function loadDashboardData() {
         fixos.forEach(f => {
             const amount = Number(f.amount);
             totalCommitted += amount;
+            
+            if (f.isSubscription) sumInstallments += amount;
+            else sumFixed += amount;
+            
             const key = f.sourceId || '__despesas_fixas__';
             const label = f.sourceName || 'Despesas Fixas';
             const meta = f.sourceId ? 'Parcelas e assinaturas' : `Despesas de ${currentMonthName}`;
@@ -321,6 +349,8 @@ async function loadDashboardData() {
         parcelas.forEach(p => {
             const amount = Number(p.installmentAmount || p.amount || 0);
             totalCommitted += amount;
+            sumInstallments += amount;
+            
             const key = p.sourceId || '__despesas_fixas__';
             const label = p.sourceName || 'Despesas Fixas';
             const meta = p.sourceId ? 'Parcelas e assinaturas' : `Despesas de ${currentMonthName}`;
@@ -335,6 +365,7 @@ async function loadDashboardData() {
         variaveis.forEach(v => {
             const amount = Number(v.amount);
             totalVariableMonth += amount;
+            sumVariables += amount;
             
             // Variável também entra no agrupamento de fontes se tiver fonte
             if (v.sourceId) {
@@ -363,8 +394,9 @@ async function loadDashboardData() {
             }
         });
 
+        const cardGastosMes = document.getElementById('card-gastos-mes');
         if (listContainer.children.length === 0) {
-            listContainer.innerHTML = '<li class="empty-state text-muted">Nenhum gasto esta semana.</li>';
+            listContainer.innerHTML = '<li class="empty-state text-muted">Nenhum gasto registrado.</li>';
         }
 
         const fixedListContainer = document.getElementById('fixed-expense-list');
@@ -390,7 +422,7 @@ async function loadDashboardData() {
                         `).join('');
 
                         li.innerHTML = `
-                            <div class="expense-item-header" onclick="this.nextElementSibling.classList.toggle('hidden'); const icon = this.querySelector('.ph-caret-down'); if(icon.style.transform==='rotate(180deg)') icon.style.transform='rotate(0deg)'; else icon.style.transform='rotate(180deg)';" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; width:100%;">
+                            <div class="expense-item-header" onclick="this.nextElementSibling.classList.toggle('hidden'); const icon = this.querySelector('.ph-caret-down'); if(icon.style.transform==='rotate(180deg)') icon.style.transform='rotate(0deg)'; else icon.style.transform='rotate(180deg)';" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer; width:100%; padding: 0.8rem 0;">
                                 <div class="expense-item-left" style="display:flex; gap:0.8rem; align-items:center;">
                                     <div class="expense-category-dot" style="background: var(--primary-dark)"></div>
                                     <div class="expense-item-info">
@@ -403,7 +435,7 @@ async function loadDashboardData() {
                                     <i class="ph ph-caret-down text-muted" style="transition:transform 0.3s;"></i>
                                 </div>
                             </div>
-                            <div class="expense-item-details hidden" style="margin-top:0.8rem; padding-left:1.5rem;">
+                            <div class="expense-item-details hidden" style="margin-top:0.2rem; padding-bottom:0.8rem; padding-left:1.5rem;">
                                 ${itemsHtml}
                             </div>
                         `;
@@ -412,8 +444,9 @@ async function loadDashboardData() {
             }
         }
 
+        const totalAllDespesas = sumFixed + sumInstallments + sumVariables;
         const fixedSpentEl = document.getElementById('fixed-spent');
-        if(fixedSpentEl) fixedSpentEl.textContent = formatCurrency(totalCommitted);
+        if(fixedSpentEl) fixedSpentEl.textContent = formatCurrency(totalAllDespesas);
 
         // 4. Cálculos Financeiros Core do Sistema
         // Note: income already declared above for balance-hint
@@ -435,15 +468,28 @@ async function loadDashboardData() {
         }
 
         // 5. Atualização de Interface
-        const totalDespesas = totalCommitted + totalVariableMonth + savings + project;
         const totalDespesasEl = document.getElementById('total-despesas');
-        if (totalDespesasEl) totalDespesasEl.textContent = formatCurrency(totalDespesas);
+        if (totalDespesasEl) totalDespesasEl.textContent = formatCurrency(totalAllDespesas);
+        
+        const tfEl = document.getElementById('total-fixed');
+        if (tfEl) tfEl.textContent = formatCurrency(sumFixed);
+        
+        const tiEl = document.getElementById('total-installments');
+        if (tiEl) tiEl.textContent = formatCurrency(sumInstallments);
+        
+        const tvEl = document.getElementById('total-variables');
+        if (tvEl) tvEl.textContent = formatCurrency(sumVariables);
 
         document.getElementById('total-income').textContent = formatCurrency(income);
         document.getElementById('savings-goal').textContent = formatCurrency(savings);
         document.getElementById('project-contribution').textContent = formatCurrency(project);
-        document.getElementById('committed-total').textContent = formatCurrency(totalCommitted);
-        document.getElementById('week-spent').textContent = formatCurrency(totalVariableWeek);
+        
+        // Se houver committed-total no HTML atualiza, senão ignora (afinal o retiramos num refactor HTML, mas a variável existe)
+        const commitEl = document.getElementById('committed-total');
+        if (commitEl) commitEl.textContent = formatCurrency(totalCommitted);
+        
+        document.getElementById('week-spent').textContent = formatCurrency(totalVariableMonth); // Mudamos a visualização de week para month
+
         
         const saldoEl = document.getElementById('available-balance');
         saldoEl.textContent = formatCurrency(availableBalance);
@@ -891,7 +937,6 @@ if(btnDelete) {
 // ==========================================
 // 5. NAVEGAÇÃO BOTTOM NAV E TELAS FASE 2 & FASE 3
 // ==========================================
-
 const navItems = document.querySelectorAll('.nav-item');
 const appContents = {
     'dashboard': document.getElementById('dashboard-screen-content'),
@@ -1258,6 +1303,30 @@ async function loadInstallmentsScreen() {
             window.cacheVariables = [];
         }
         
+        // Carrega preferências armazenadas
+        const vToggle = document.getElementById('toggle-matrix-variables');
+        if (vToggle) {
+            const savedV = localStorage.getItem('A2_matrix_vars');
+            if (savedV !== null) vToggle.checked = (savedV === 'true');
+            vToggle.onchange = function() {
+                localStorage.setItem('A2_matrix_vars', this.checked);
+                renderSourcesCarousel();
+                selectSource(window._currentSelectedSourceId);
+            };
+        }
+        
+        const iToggle = document.getElementById('toggle-matrix-installments');
+        if (iToggle) {
+            const savedI = localStorage.getItem('A2_matrix_insts');
+            if (savedI !== null) iToggle.checked = (savedI === 'true');
+            iToggle.onchange = function() {
+                localStorage.setItem('A2_matrix_insts', this.checked);
+                renderSourcesCarousel();
+                selectSource(window._currentSelectedSourceId);
+            };
+        }
+        
+        setupCarouselScrollSpy();
         renderSourcesCarousel();
         
         // Simula click no cartão 'Visão Geral' por padrão
@@ -1272,7 +1341,7 @@ function renderSourcesCarousel() {
     
     // Inicia com o Cartão Geral
     let html = `
-        <div class="credit-card" style="background: linear-gradient(135deg, #333, #000);" onclick="selectSource('all')">
+        <div class="credit-card" data-source-id="all" style="background: linear-gradient(135deg, #333, #000);" onclick="selectSource('all')">
             <div class="card-name">Visão Geral</div>
             <div class="card-chip"></div>
             <div class="card-balance">Resumo</div>
@@ -1280,15 +1349,20 @@ function renderSourcesCarousel() {
         </div>
     `;
 
-    const includeVars = document.getElementById('toggle-matrix-variables')?.checked;
+    const includeVars = document.getElementById('toggle-matrix-variables')?.checked !== false; // default true if missing
+    const includeInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
+
     cacheSources.forEach(source => {
         // Calcula quanto esse cartão acumula neste mês
         let monthTotal = 0;
         cacheInstallments.forEach(p => {
-            if(p.sourceId === source.id && p.remainingInstallments > 0) monthTotal += Number(p.installmentAmount);
+            if(includeInst && p.sourceId === source.id && p.remainingInstallments > 0) monthTotal += Number(p.installmentAmount);
         });
         cacheFixed.forEach(f => {
-            if(f.sourceId === source.id) monthTotal += Number(f.amount);
+            if(f.sourceId === source.id) {
+                if (f.isSubscription && !includeInst) return;
+                monthTotal += Number(f.amount);
+            }
         });
         if(includeVars && window.cacheVariables) {
             window.cacheVariables.forEach(v => {
@@ -1297,7 +1371,7 @@ function renderSourcesCarousel() {
         }
 
         html += `
-            <div class="credit-card" style="background: linear-gradient(135deg, ${source.color}, #555); position:relative;" onclick="selectSource('${source.id}')">
+            <div class="credit-card" data-source-id="${source.id}" style="background: linear-gradient(135deg, ${source.color}, #555); position:relative;" onclick="selectSource('${source.id}')">
                 <div class="card-name">${source.name}</div>
                 <button class="btn-edit-source" onclick="event.stopPropagation(); window.openEditSourceModal('${source.id}')" style="position:absolute; top:12px; right:12px; background:rgba(0,0,0,0.3); border-radius:50%; width:28px; height:28px; display:flex; align-items:center; justify-content:center; border:none; color:#fff; cursor:pointer; transition:background 0.2s;"><i class="ph ph-gear" style="font-size:1.1rem;"></i></button>
                 <div class="card-chip"></div>
@@ -1321,12 +1395,24 @@ window.selectSource = function(sourceId) {
     window._currentSelectedSourceId = sourceId;
     const titleEl = document.getElementById('inst-table-title');
 
-    let sourceName = 'Todas as Fontes';
+    let sourceName = 'Todos';
     if (sourceId !== 'all') {
         const found = cacheSources.find(s => s.id === sourceId);
         if (found) sourceName = found.name;
     }
     titleEl.textContent = `${sourceName}`;
+
+    // Highlight carousel
+    document.querySelectorAll('.credit-card').forEach(cc => cc.style.transform = 'scale(0.95)');
+    const selCard = document.querySelector(`.credit-card[data-source-id="${sourceId}"]`);
+    if (selCard) selCard.style.transform = 'scale(1)';
+
+    // Scroll automatically if not user scroll
+    if (!window._isProgrammaticScroll && selCard) {
+        window._isProgrammaticScroll = true;
+        selCard.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+        setTimeout(() => { window._isProgrammaticScroll = false; }, 600);
+    }
 
     // Filtrar
     const filteredInst = sourceId === 'all'
@@ -1338,15 +1424,21 @@ window.selectSource = function(sourceId) {
         : cacheFixed.filter(f => f.sourceId === sourceId)
     ).filter(f => f.sourceId || sourceId !== 'all');
 
+    const includeVars = document.getElementById('toggle-matrix-variables')?.checked !== false; // default true
+    const includeInst = document.getElementById('toggle-matrix-installments')?.checked !== false; // default true
+
     // Junta numa lista
     const allItems = [];
-    filteredInst.forEach(p => allItems.push({ type: 'installments', ...p }));
+    if (includeInst) {
+        filteredInst.forEach(p => allItems.push({ type: 'installments', ...p }));
+    }
+    
     filteredFixed.forEach(f => {
         if (sourceId === 'all' && !f.sourceId) return;
+        if (f.isSubscription && !includeInst) return;
         allItems.push({ type: 'fixedExpenses', ...f });
     });
 
-    const includeVars = document.getElementById('toggle-matrix-variables')?.checked;
     if (includeVars && window.cacheVariables) {
         let varsToInclude = window.cacheVariables.filter(v => v.sourceId);
         if (sourceId !== 'all') {
@@ -1447,6 +1539,7 @@ window.sortMatrix = function(key) {
             b.classList.add('active');
             if(icon) {
                 icon.style.display = 'inline-block';
+                // Adjust arrow visual directions purely for aesthetics based on user feedback
                 icon.className = _matrixSortDir === 'asc' ? 'ph ph-arrow-up list-sort-icon' : 'ph ph-arrow-down list-sort-icon';
             }
         }
@@ -1454,12 +1547,59 @@ window.sortMatrix = function(key) {
     renderMatrixList(window._currentMatrixItems || []);
 };
 
+function setupCarouselScrollSpy() {
+    const carousel = document.getElementById('sources-carousel');
+    if (!carousel || carousel.dataset.spyInit) return;
+    carousel.dataset.spyInit = 'true';
+
+    carousel.addEventListener('scroll', () => {
+        if (window._isProgrammaticScroll) return;
+        
+        clearTimeout(window._carouselScrollTimer);
+        window._carouselScrollTimer = setTimeout(() => {
+            const cards = carousel.querySelectorAll('.credit-card');
+            const carouselRect = carousel.getBoundingClientRect();
+            // middle point of the scroll container
+            const centerX = carouselRect.left + (carousel.clientWidth / 2);
+            
+            let closestCard = null;
+            let minDiff = Infinity;
+            
+            cards.forEach(card => {
+                const rect = card.getBoundingClientRect();
+                const cardCenter = rect.left + (rect.width / 2);
+                const diff = Math.abs(centerX - cardCenter);
+                if (diff < minDiff) {
+                    minDiff = diff;
+                    closestCard = card;
+                }
+            });
+            
+            if (closestCard) {
+                const sid = closestCard.getAttribute('data-source-id');
+                if (sid && sid !== window._currentSelectedSourceId) {
+                    window._isProgrammaticScroll = true;
+                    // change selection visually and reload list
+                    window.selectSource(sid);
+                    setTimeout(() => { window._isProgrammaticScroll = false; }, 300);
+                }
+            }
+        }, 150); // debounce time
+    });
+}
+
+
 // Meses Seguintes: opens a bottom sheet with the full 12-month table
 window.openMonthsModal = function() {
+    document.getElementById('modal-months-overlay')?.remove();
+
     const items = window._currentMatrixItems || [];
     const now = new Date();
     const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
     const numMonths = 12;
+
+    const showVar = document.getElementById('toggle-matrix-variables').checked;
+    const showInst = document.getElementById('toggle-matrix-installments').checked;
 
     // Build header
     let headHtml = '<tr><th>Despesa / Fonte</th>';
@@ -1509,8 +1649,18 @@ window.openMonthsModal = function() {
     overlay.id = 'modal-months-overlay';
     overlay.innerHTML = `
         <div class="modal-sheet" style="max-height:88vh;">
-            <div class="modal-sheet-header">
+            <div class="modal-sheet-header" style="flex-wrap: wrap; gap: 10px;">
                 <h3>📅 Próximos 12 Meses</h3>
+                <div style="display:flex; gap:1rem;">
+                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; cursor:pointer;">
+                        <input type="checkbox" id="modal-tgl-var" ${showVar ? 'checked' : ''} style="accent-color: var(--primary-color);">
+                        Gastos
+                    </label>
+                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; cursor:pointer;">
+                        <input type="checkbox" id="modal-tgl-inst" ${showInst ? 'checked' : ''} style="accent-color: var(--primary-color);">
+                        Parcelas
+                    </label>
+                </div>
                 <button class="modal-sheet-close" onclick="document.getElementById('modal-months-overlay').remove()">×</button>
             </div>
             <div class="months-modal-scroll">
@@ -1518,11 +1668,75 @@ window.openMonthsModal = function() {
                     <thead>${headHtml}</thead>
                     <tbody>${bodyHtml}</tbody>
                 </table>
+                <div style="margin-top: 1.5rem; background: var(--bg-main); padding: 1rem; border-radius: 8px;">
+                    <h4 style="margin-bottom: 1rem; color: var(--text-color); font-size: 0.9rem; text-align: center;">Evolução da Dívida</h4>
+                    <div style="position: relative; height: 200px;">
+                        <canvas id="monthsChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
     `;
     overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
     document.body.appendChild(overlay);
+    
+    // Bind the new checkboxes to trigger an update flow
+    document.getElementById('modal-tgl-var').addEventListener('change', (e) => {
+        document.getElementById('toggle-matrix-variables').checked = e.target.checked;
+        localStorage.setItem('A2_matrix_var', e.target.checked);
+        window.selectSource(window._currentSelectedSourceId || 'all');
+        setTimeout(window.openMonthsModal, 50); // slight delay to allow selectSource to run
+    });
+    document.getElementById('modal-tgl-inst').addEventListener('change', (e) => {
+        document.getElementById('toggle-matrix-installments').checked = e.target.checked;
+        localStorage.setItem('A2_matrix_inst', e.target.checked);
+        window.selectSource(window._currentSelectedSourceId || 'all');
+        setTimeout(window.openMonthsModal, 50);
+    });
+
+    // Initialize Chart
+    const ctx = document.getElementById('monthsChart').getContext('2d');
+    const labels = [];
+    for (let i = 0; i < numMonths; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+        labels.push(`${monthNames[d.getMonth()]} ${d.getFullYear().toString().substr(-2)}`);
+    }
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Total',
+                data: colTotals,
+                borderColor: '#e74c3c',
+                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointBackgroundColor: '#e74c3c',
+                pointRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return formatCurrency(context.raw || 0);
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: { beginAtZero: true, ticks: { display: false }, grid: { color: 'rgba(200,200,200,0.1)' } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            }
+        }
+    });
 };
 
 // Item Action Modal – opens when clicking a row in the installments list
@@ -1622,7 +1836,7 @@ async function loadReportsScreen() {
     if(!currentUserId) return;
 
     try {
-        const monthData = await getOrCreateCurrentMonth(currentUserId);
+        const monthData = await getActiveMonthData(currentUserId);
         const fixos = await getFixedExpenses(currentUserId);
         const parcelas = await getInstallments(currentUserId);
         const variaveis = await getVariableExpenses(currentUserId);
@@ -1815,6 +2029,85 @@ function rebindDragEvents() {
         ele.addEventListener('mouseup', stopDrag, { signal });
         ele.addEventListener('mouseleave', stopDrag, { signal });
         ele.style.cursor = 'grab';
+    });
+}
+
+// ==========================================
+// AVATAR E PERFIL
+// ==========================================
+const avatarBtn = document.getElementById('user-avatar-btn');
+const avatarMenu = document.getElementById('avatar-dropdown-menu');
+
+if (avatarBtn && avatarMenu) {
+    avatarBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        avatarMenu.style.display = avatarMenu.style.display === 'none' ? 'flex' : 'none';
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!avatarBtn.contains(e.target) && !avatarMenu.contains(e.target)) {
+            avatarMenu.style.display = 'none';
+        }
+    });
+}
+
+const btnEditProfile = document.getElementById('btn-edit-profile');
+const modalEditProfile = document.getElementById('modal-edit-profile');
+const formEditProfile = document.getElementById('form-edit-profile');
+
+if (btnEditProfile) {
+    btnEditProfile.addEventListener('click', () => {
+        avatarMenu.style.display = 'none';
+        document.getElementById('profile-display-name').value = currentProfile?.displayName || currentProfile?.name || document.getElementById('user-name-display').textContent;
+        document.getElementById('profile-photo-url').value = currentProfile?.photoURL || '';
+        modalEditProfile.classList.remove('hidden');
+    });
+}
+
+if (formEditProfile) {
+    formEditProfile.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const btn = formEditProfile.querySelector('button');
+        btn.disabled = true;
+        btn.textContent = 'Salvando...';
+        try {
+            const newName = document.getElementById('profile-display-name').value.trim();
+            const newPhoto = document.getElementById('profile-photo-url').value.trim();
+            
+            await updateUserProfile(currentUserId, {
+                displayName: newName,
+                photoURL: newPhoto
+            });
+            
+            if (!currentProfile) currentProfile = {};
+            currentProfile.displayName = newName;
+            currentProfile.photoURL = newPhoto;
+            
+            const displayFirst = newName.split(' ')[0];
+            document.getElementById('user-name-display').textContent = displayFirst;
+            
+            const avatarInitials = document.getElementById('user-avatar-initials');
+            const avatarImg = document.getElementById('user-avatar-img');
+            if (newPhoto) {
+                avatarImg.src = newPhoto;
+                avatarImg.style.display = 'block';
+                avatarInitials.style.display = 'none';
+            } else {
+                avatarInitials.textContent = displayFirst.charAt(0).toUpperCase();
+                avatarInitials.style.display = 'block';
+                avatarImg.style.display = 'none';
+                avatarImg.src = '';
+            }
+
+            modalEditProfile.classList.add('hidden');
+            showToast('Perfil atualizado com sucesso!');
+        } catch (err) {
+            console.error(err);
+            alert("Erro ao salvar perfil.");
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Salvar Alterações';
+        }
     });
 }
 
