@@ -4,7 +4,7 @@ import {
     addFixedExpense, getFixedExpenses,
     addInstallment, getInstallments,
     addVariableExpense, getVariableExpenses,
-    getUserProfile, getPartnerVariableExpenses, getPartnerMonthSummary, addAuditLog, getWeekNumber,
+    getUserProfile, updateUserProfile, getPartnerVariableExpenses, getPartnerMonthSummary, addAuditLog, getWeekNumber,
     addSource, getSources, updateSource, deleteSource,
     getCategories, addCategory, deleteCategory,
     getPartnerAllVariableExpenses, getPartnerFixedExpenses, getPartnerInstallments,
@@ -1362,18 +1362,30 @@ async function loadInstallmentsScreen() {
 function renderSourcesCarousel() {
     const container = document.getElementById('sources-carousel');
     
-    // Inicia com o Cartão Geral
+    // Calcula total geral para o card Visão Geral
+    const includeVars = document.getElementById('toggle-matrix-variables')?.checked !== false;
+    const includeInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
+    let grandTotal = 0;
+    cacheInstallments.forEach(p => {
+        if (includeInst && p.remainingInstallments > 0) grandTotal += Number(p.installmentAmount);
+    });
+    cacheFixed.forEach(f => {
+        if (f.isSubscription && !includeInst) return;
+        grandTotal += Number(f.amount);
+    });
+    if (includeVars && window.cacheVariables) {
+        window.cacheVariables.forEach(v => grandTotal += Number(v.amount));
+    }
+
     let html = `
         <div class="credit-card" data-source-id="all" style="background: linear-gradient(135deg, #333, #000);" onclick="selectSource('all')">
             <div class="card-name">Visão Geral</div>
             <div class="card-chip"></div>
-            <div class="card-balance">Resumo</div>
+            <div class="card-balance">${formatCurrency(grandTotal)}</div>
             <div class="card-footer">Todas as Fontes</div>
         </div>
     `;
 
-    const includeVars = document.getElementById('toggle-matrix-variables')?.checked !== false; // default true if missing
-    const includeInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
 
     cacheSources.forEach(source => {
         // Calcula quanto esse cartão acumula neste mês
@@ -1613,169 +1625,119 @@ function setupCarouselScrollSpy() {
 }
 
 
-// Meses Seguintes: opens a bottom sheet with the full 12-month table
+// Meses Seguintes: inline table on desktop, bottom sheet modal on mobile
 window.openMonthsModal = function() {
     try {
-        document.getElementById('modal-months-overlay')?.remove();
-
         const items = window._currentMatrixItems || [];
         const now = new Date();
         const monthNames = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
         const numMonths = 12;
+        const isDesktop = window.innerWidth >= 1024;
 
-        const showVar = document.getElementById('toggle-matrix-variables')?.checked !== false;
-        const showInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
-
-    // Build header
-    let headHtml = '<tr><th>Despesa / Fonte</th>';
-    for (let i = 0; i < numMonths; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        headHtml += `<th>${monthNames[d.getMonth()]} ${d.getFullYear()}</th>`;
-    }
-    headHtml += '</tr>';
-
-    // Build rows
-    const colTotals = Array(numMonths).fill(0);
-    let bodyHtml = '';
-    const sorted = [...items].sort((a, b) => {
-        const sa = a.sourceName || 'ZZZ';
-        const sb = b.sourceName || 'ZZZ';
-        return sa.localeCompare(sb) || (a.description || a.name || '').localeCompare(b.description || b.name || '');
-    });
-
-    sorted.forEach(item => {
-        const name = item.description || item.name || '—';
-        const source = item.sourceName || 'Despesas Fixas';
-        const isInst = item.type === 'installments';
-        const val = Number(item.installmentAmount || item.amount || 0);
-
-        bodyHtml += `<tr><td><strong>${name}</strong><br><small class="text-muted">${source}</small></td>`;
+        // Build table HTML (shared between inline and modal)
+        let headHtml = '<tr><th class="months-sticky-col">Despesa / Fonte</th>';
         for (let i = 0; i < numMonths; i++) {
-            const active = isInst ? i < item.remainingInstallments : true;
-            if (active) {
-                bodyHtml += `<td>${formatCurrency(val)}</td>`;
-                colTotals[i] += val;
-            } else {
-                bodyHtml += `<td style="opacity:0.35; color:var(--text-muted);">—</td>`;
+            const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+            headHtml += `<th>${monthNames[d.getMonth()]} ${d.getFullYear()}</th>`;
+        }
+        headHtml += '</tr>';
+
+        const colTotals = Array(numMonths).fill(0);
+        let bodyHtml = '';
+        const sorted = [...items].sort((a, b) => {
+            const sa = a.sourceName || 'ZZZ';
+            const sb = b.sourceName || 'ZZZ';
+            return sa.localeCompare(sb) || (a.description || a.name || '').localeCompare(b.description || b.name || '');
+        });
+
+        sorted.forEach(item => {
+            const name = item.description || item.name || '—';
+            const source = item.sourceName || 'Despesas Fixas';
+            const isInst = item.type === 'installments';
+            const val = Number(item.installmentAmount || item.amount || 0);
+
+            bodyHtml += `<tr><td class="months-sticky-col"><strong>${name}</strong><br><small class="text-muted">${source}</small></td>`;
+            for (let i = 0; i < numMonths; i++) {
+                const active = isInst ? i < item.remainingInstallments : true;
+                if (active) {
+                    bodyHtml += `<td>${formatCurrency(val)}</td>`;
+                    colTotals[i] += val;
+                } else {
+                    bodyHtml += `<td style="opacity:0.35; color:var(--text-muted);">—</td>`;
+                }
             }
+            bodyHtml += '</tr>';
+        });
+
+        bodyHtml += `<tr class="matrix-footer"><td class="months-sticky-col">Total</td>`;
+        for (let i = 0; i < numMonths; i++) {
+            bodyHtml += `<td>${formatCurrency(colTotals[i])}</td>`;
         }
         bodyHtml += '</tr>';
-    });
 
-    // Totals footer
-    bodyHtml += `<tr class="matrix-footer"><td>Total</td>`;
-    for (let i = 0; i < numMonths; i++) {
-        bodyHtml += `<td>${formatCurrency(colTotals[i])}</td>`;
-    }
-    bodyHtml += '</tr>';
+        if (isDesktop) {
+            // ── Desktop: render inline, no modal ──
+            const inlineSection = document.getElementById('months-inline-section');
+            const inlineTable = document.getElementById('months-inline-table');
+            if (inlineSection && inlineTable) {
+                inlineTable.innerHTML = `<thead>${headHtml}</thead><tbody>${bodyHtml}</tbody>`;
+                inlineSection.classList.remove('hidden');
+                // Scroll into view smoothly
+                inlineSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        } else {
+            // ── Mobile: bottom-sheet overlay ──
+            document.getElementById('modal-months-overlay')?.remove();
 
-    const overlay = document.createElement('div');
-    overlay.className = 'modal-overlay';
-    overlay.id = 'modal-months-overlay';
-    overlay.innerHTML = `
-        <div class="modal-sheet" style="max-height:88vh;">
-            <div class="modal-sheet-header" style="flex-wrap: wrap; gap: 10px;">
-                <h3>📅 Próximos 12 Meses</h3>
-                <div style="display:flex; gap:1rem;">
-                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; cursor:pointer;">
-                        <input type="checkbox" id="modal-tgl-var" ${showVar ? 'checked' : ''} style="accent-color: var(--primary-color);">
-                        Gastos
-                    </label>
-                    <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; cursor:pointer;">
-                        <input type="checkbox" id="modal-tgl-inst" ${showInst ? 'checked' : ''} style="accent-color: var(--primary-color);">
-                        Parcelas
-                    </label>
-                </div>
-                <button class="modal-sheet-close" onclick="document.getElementById('modal-months-overlay').remove()">×</button>
-            </div>
-            <div class="months-modal-scroll">
-                <table class="months-modal-table">
-                    <thead>${headHtml}</thead>
-                    <tbody>${bodyHtml}</tbody>
-                </table>
-                <div style="margin-top: 1.5rem; background: var(--bg-main); padding: 1rem; border-radius: 8px;">
-                    <h4 style="margin-bottom: 1rem; color: var(--text-main); font-size: 0.9rem; text-align: center;">Evolução da Dívida</h4>
-                    <div style="position: relative; height: 200px;">
-                        <canvas id="monthsChart"></canvas>
+            const showVar = document.getElementById('toggle-matrix-variables')?.checked !== false;
+            const showInst = document.getElementById('toggle-matrix-installments')?.checked !== false;
+
+            const overlay = document.createElement('div');
+            overlay.className = 'modal-overlay';
+            overlay.id = 'modal-months-overlay';
+            overlay.innerHTML = `
+                <div class="modal-sheet" style="max-height:90vh;">
+                    <div class="modal-sheet-header" style="flex-wrap: wrap; gap: 10px;">
+                        <h3>📅 Próximos 12 Meses</h3>
+                        <div style="display:flex; gap:1rem;">
+                            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; cursor:pointer;">
+                                <input type="checkbox" id="modal-tgl-var" ${showVar ? 'checked' : ''} style="accent-color: var(--primary-color);">
+                                Gastos
+                            </label>
+                            <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.8rem; cursor:pointer;">
+                                <input type="checkbox" id="modal-tgl-inst" ${showInst ? 'checked' : ''} style="accent-color: var(--primary-color);">
+                                Parcelas
+                            </label>
+                        </div>
+                        <button class="modal-sheet-close" onclick="document.getElementById('modal-months-overlay').remove()">×</button>
+                    </div>
+                    <div class="months-modal-scroll">
+                        <table class="months-modal-table">
+                            <thead>${headHtml}</thead>
+                            <tbody>${bodyHtml}</tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
-        </div>
-    `;
-    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
-    document.body.appendChild(overlay);
-    
-    // Bind the new checkboxes to trigger an update flow
-    document.getElementById('modal-tgl-var').addEventListener('change', (e) => {
-        document.getElementById('toggle-matrix-variables').checked = e.target.checked;
-        localStorage.setItem('A2_matrix_var', e.target.checked);
-        window.selectSource(window._currentSelectedSourceId || 'all');
-        setTimeout(window.openMonthsModal, 50); // slight delay to allow selectSource to run
-    });
-    document.getElementById('modal-tgl-inst').addEventListener('change', (e) => {
-        document.getElementById('toggle-matrix-installments').checked = e.target.checked;
-        localStorage.setItem('A2_matrix_inst', e.target.checked);
-        window.selectSource(window._currentSelectedSourceId || 'all');
-        setTimeout(window.openMonthsModal, 50);
-    });
+            `;
+            overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+            document.body.appendChild(overlay);
 
-    // Initialize Chart
-    try {
-        const ctx = document.getElementById('monthsChart').getContext('2d');
-    const labels = [];
-    for (let i = 0; i < numMonths; i++) {
-        const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
-        labels.push(`${monthNames[d.getMonth()]} ${d.getFullYear().toString().substr(-2)}`);
-    }
-
-    new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: labels,
-            datasets: [{
-                label: 'Total',
-                data: colTotals,
-                borderColor: '#e74c3c',
-                backgroundColor: 'rgba(231, 76, 60, 0.1)',
-                borderWidth: 2,
-                fill: true,
-                tension: 0.3,
-                pointBackgroundColor: '#e74c3c',
-                pointRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false },
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return formatCurrency(context.raw || 0);
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: { 
-                    beginAtZero: true, 
-                    ticks: { font: { size: 10 }, color: '#8a94a6' }, 
-                    grid: { color: 'rgba(0,0,0,0.05)' } 
-                },
-                x: { 
-                    ticks: { font: { size: 10 }, color: '#8a94a6' }, 
-                    grid: { display: false } 
-                }
-            }
+            document.getElementById('modal-tgl-var')?.addEventListener('change', (e) => {
+                document.getElementById('toggle-matrix-variables').checked = e.target.checked;
+                localStorage.setItem('A2_matrix_var', e.target.checked);
+                window.selectSource(window._currentSelectedSourceId || 'all');
+                setTimeout(window.openMonthsModal, 50);
+            });
+            document.getElementById('modal-tgl-inst')?.addEventListener('change', (e) => {
+                document.getElementById('toggle-matrix-installments').checked = e.target.checked;
+                localStorage.setItem('A2_matrix_inst', e.target.checked);
+                window.selectSource(window._currentSelectedSourceId || 'all');
+                setTimeout(window.openMonthsModal, 50);
+            });
         }
-    });
-    } catch(chartErr) {
-        console.error("Chart Error:", chartErr);
-    }
     } catch(err) {
         console.error("Critical error in openMonthsModal:", err);
-        alert("Erro interno ao calcular meses seguintes. Verifique o console.");
+        alert("Erro interno ao calcular meses seguintes: " + err.message);
     }
 };
 

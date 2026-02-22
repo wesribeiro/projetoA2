@@ -281,6 +281,18 @@
                     <ul id="matrix-list" class="expense-list" style="padding: 0 0.25rem;"></ul>
                 </div>
             </section>
+
+            <!-- Meses Seguintes (Inline em PC, Modal no Mobile) -->
+            <section class="card hidden" id="months-inline-section" style="margin-top: 1rem;">
+                <div class="card-header" style="justify-content: space-between; align-items: center;">
+                    <h3>📅 Próximos 12 Meses</h3>
+                    <button onclick="document.getElementById('months-inline-section').classList.add('hidden')" class="btn-secondary" style="font-size: 0.8rem; padding: 0.3rem 0.7rem;">Fechar</button>
+                </div>
+                <div class="months-modal-scroll" id="months-inline-scroll">
+                    <table class="months-modal-table" id="months-inline-table">
+                    </table>
+                </div>
+            </section>
         </main>
 
         <!-- Tela Casal -->
